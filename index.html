@@ -1,0 +1,359 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>timepoetry</title>
+<meta name="description" content="The current positions of the Sun, Moon, planets, Chiron and the lunar nodes, with every major aspect, the Moon's phase and its void-of-course times. Computed live with the Swiss Ephemeris.">
+<style>
+/* Layout: one left-aligned almanac column; the Moon leads, then the table of places, then the aspects, then three doors. */
+@font-face { font-family: "EB Garamond"; font-style: normal; font-weight: 400 800; font-display: swap; src: url("fonts/eb-garamond-latin-wght-normal.woff2") format("woff2"); }
+@font-face { font-family: "EB Garamond"; font-style: italic; font-weight: 400 800; font-display: swap; src: url("fonts/eb-garamond-latin-wght-italic.woff2") format("woff2"); }
+@font-face { font-family: "Noto Sans Symbols"; font-display: swap; src: url("fonts/noto-sans-symbols-symbols-400-normal.woff2") format("woff2"); }
+@font-face { font-family: "Noto Sans Symbols 2"; font-display: swap; src: url("fonts/noto-sans-symbols-2-symbols-400-normal.woff2") format("woff2"); }
+:root {
+  /* Night (navy and gold) is the resting palette; the script repaints these tokens by the visitor's clock. */
+  --bg1: #0a1030; --bg2: #161d45;
+  --ink: #ece5cf; --muted: #a2a7c4; --accent: #dcb866; --line: #2c3566; --panel: #121a40;
+  --moon-lit: #f3ead0; --moon-dark: #1c2552;
+  --stars: 1;
+  --serif: "EB Garamond", Garamond, "Iowan Old Style", "Palatino Linotype", Georgia, serif;
+  --glyph: "Noto Sans Symbols", "Noto Sans Symbols 2", "Apple Symbols", "Segoe UI Symbol", "DejaVu Sans", sans-serif;
+  color-scheme: dark;
+}
+html { min-height: 100%; background: var(--bg2); }
+body {
+  min-height: 100vh; margin: 0;
+  background: linear-gradient(180deg, var(--bg1), var(--bg2)) fixed;
+  color: var(--ink);
+  font-family: var(--serif); font-size: 1.1875rem; line-height: 1.45;
+  font-variant-numeric: lining-nums tabular-nums;
+  -webkit-text-size-adjust: 100%;
+}
+#stars { position: fixed; inset: 0; width: 100%; height: 100%; pointer-events: none; opacity: var(--stars); z-index: 0; }
+.page {
+  position: relative; z-index: 1;
+  max-width: 46rem; margin: 0 auto;
+  padding-left: max(20px, env(safe-area-inset-left, 0px)); padding-right: max(20px, env(safe-area-inset-right, 0px));
+  padding-block: 3.5rem 3rem;
+  display: flex; flex-direction: column; gap: 3.25rem;
+}
+a { color: inherit; }
+a:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; border-radius: 2px; }
+.g { font-family: var(--glyph); font-style: normal; font-weight: 400; }
+h1, h2, p, ul, ol { margin: 0; }
+ul, ol { list-style: none; padding: 0; }
+
+.mast { display: flex; flex-direction: column; gap: .35rem; }
+.mast h1 { font-size: clamp(3rem, 13vw, 5.25rem); font-style: italic; font-weight: 400; line-height: 1; letter-spacing: -.015em; }
+.mast h1 span { color: var(--accent); }
+.mast .now { color: var(--muted); font-size: 1.05rem; }
+
+h2 { font-size: .85rem; font-weight: 500; letter-spacing: .16em; text-transform: uppercase; color: var(--accent); }
+section { display: flex; flex-direction: column; gap: .9rem; }
+.note { color: var(--muted); font-size: 1rem; }
+
+/* Moon */
+.moon { display: grid; grid-template-columns: 6.5rem minmax(0, 1fr); gap: 1.5rem; align-items: center; }
+.moon svg { width: 100%; height: auto; display: block; }
+.moon .phase { font-size: 2rem; line-height: 1.1; font-style: italic; }
+.moon .facts { color: var(--muted); }
+.moon .voc { margin-top: .45rem; }
+.moon .voc b { font-weight: 500; color: var(--accent); }
+.phases { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: .75rem 1rem; border-top: 1px solid var(--line); padding-top: .9rem; }
+.phases li { display: flex; flex-direction: column; min-width: 0; }
+.phases .nm { font-size: .95rem; }
+.phases .wh { color: var(--muted); font-size: .95rem; }
+
+/* Rows shared by the two tables */
+.rows { border-top: 1px solid var(--line); }
+.rows li { border-bottom: 1px solid var(--line); padding: .5rem 0; display: grid; column-gap: .9rem; align-items: baseline; }
+.sky li { grid-template-columns: 1.6rem 6.2rem minmax(0, 1fr) minmax(0, 15.5rem); }
+.sky .g.body { font-size: 1.2rem; color: var(--accent); text-align: center; }
+.sky .pos b { font-weight: 500; }
+.sky .pos .g { margin: 0 .15em; }
+.rx { font-style: italic; color: var(--accent); margin-left: .35em; }
+.rx sub { font-size: .7em; }
+.nx { color: var(--muted); font-size: .98rem; }
+.nx > span { display: block; }
+.asp li { grid-template-columns: 5.6rem minmax(0, 1fr) minmax(0, 21rem); }
+.asp .gl { font-family: var(--glyph); font-size: 1.12rem; color: var(--accent); white-space: nowrap; letter-spacing: .08em; }
+.asp .orb { color: var(--muted); font-size: .98rem; }
+.asp .orb b { font-weight: 500; color: var(--ink); }
+.asp li.tight .orb b { color: var(--accent); }
+.asp .what small { display: block; color: var(--muted); font-size: .98rem; }
+
+/* Doors */
+.doors { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 1rem; }
+.door { display: flex; flex-direction: column; gap: .3rem; padding: 1.1rem 1.15rem 1.2rem; border: 1px solid var(--line); background: var(--panel); text-decoration: none; min-width: 0; }
+.door .t { font-size: 1.4rem; font-style: italic; line-height: 1.15; }
+.door .d { color: var(--muted); font-size: 1rem; }
+.door .go { margin-top: auto; padding-top: .6rem; font-size: .8rem; letter-spacing: .14em; text-transform: uppercase; color: var(--accent); }
+a.door:hover { border-color: var(--accent); }
+.door.soon { border-style: dashed; background: none; }
+
+footer { color: var(--muted); font-size: .95rem; display: flex; flex-direction: column; gap: .6rem; border-top: 1px solid var(--line); padding-top: 1.25rem; }
+footer p { max-width: 65ch; }
+
+@media (max-width: 640px) {
+  body { font-size: 1.125rem; }
+  .page { gap: 2.75rem; padding-block: 2.25rem 2.5rem; }
+  .moon { grid-template-columns: 4.75rem minmax(0, 1fr); gap: 1.1rem; }
+  .moon .phase { font-size: 1.7rem; }
+  .phases { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .sky li { grid-template-columns: 1.6rem 6.2rem minmax(0, 1fr); }
+  .sky .nx { grid-column: 2 / -1; }
+  .nx > span { display: inline; }
+  .nx > span + span::before { content: " · "; }
+  .asp li { grid-template-columns: 5.2rem minmax(0, 1fr); }
+  .asp .orb { grid-column: 2; }
+  .doors { grid-template-columns: minmax(0, 1fr); }
+}
+</style>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='6' fill='%230a1030'/%3E%3Cpath d='M20 5a11 11 0 1 0 0 22 13 13 0 0 1 0-22z' fill='%23dcb866'/%3E%3C/svg%3E">
+</head>
+<body>
+<canvas id="stars" aria-hidden="true"></canvas>
+<div class="page">
+  <header class="mast">
+    <h1>time<span>poetry</span></h1>
+    <p class="now" id="now">The sky as it stands right now.</p>
+  </header>
+
+  <section aria-labelledby="h-moon">
+    <h2 id="h-moon">The Moon</h2>
+    <div class="moon">
+      <svg id="moon-disc" viewBox="-52 -52 104 104" role="img" aria-label="Moon phase">
+        <circle r="50" fill="var(--moon-dark)" stroke="var(--line)" stroke-width="1"/>
+        <path id="moon-lit" d="" fill="var(--moon-lit)"/>
+      </svg>
+      <div>
+        <p class="phase" id="phase-name">Reading the sky…</p>
+        <p class="facts" id="phase-facts">Loading the ephemeris.</p>
+        <p class="voc" id="voc"></p>
+      </div>
+    </div>
+    <ol class="phases" id="phases"></ol>
+  </section>
+
+  <section aria-labelledby="h-sky">
+    <h2 id="h-sky">Where everything is</h2>
+    <ul class="rows sky" id="sky"><li><span></span><span class="note">Loading…</span></li></ul>
+  </section>
+
+  <section aria-labelledby="h-asp">
+    <h2 id="h-asp">Aspects in effect</h2>
+    <ul class="rows asp" id="asp"><li><span></span><span class="note">Loading…</span></li></ul>
+  </section>
+
+  <section aria-labelledby="h-doors">
+    <h2 id="h-doors">Elsewhere</h2>
+    <div class="doors">
+      <a class="door" href="https://github.com/adriennnne/timepoetry-ephemeris">
+        <span class="t">Time Poetry Ephemeris</span>
+        <span class="d">An ephemeris skill for Claude, built on the Swiss Ephemeris. Free and open source.</span>
+        <span class="go">On GitHub →</span>
+      </a>
+      <a class="door" href="https://popcall.com/timepoetry">
+        <span class="t">Ask me a question</span>
+        <span class="d">Send your question and birth details by message. I answer in writing.</span>
+        <span class="go">On Popcall →</span>
+      </a>
+      <div class="door soon" id="planners">
+        <span class="t">The Sky in 2027</span>
+        <span class="d">An astrological planner and almanac, in print.</span>
+        <span class="go">Coming soon to Amazon</span>
+      </div>
+    </div>
+  </section>
+
+  <footer>
+    <p>Tropical zodiac, geocentric, true node. Orbs are 8° with the Sun or Moon, 6° between planets, and 3° with Chiron or the nodes. The Moon is void of course from its last conjunction, sextile, square, trine or opposition to the Sun or a planet until it changes sign. All times are in your own time zone<span id="tz"></span>.</p>
+    <p>Computed in your browser with the <a href="https://www.astro.com/swisseph/">Swiss Ephemeris</a> <span id="swe-ver"></span>, © Astrodienst AG, used under the AGPL through the <a href="https://github.com/kuntayerkus/swisseph-wasm">@kuntay/swisseph</a> WebAssembly build. This page's own code is under the same licence, and its <a href="https://github.com/adriennnne/timepoetry.com">source is on GitHub</a>.</p>
+  </footer>
+</div>
+
+<script type="module">
+import createSwissEph from './vendor/swisseph.mjs';
+import { Sky, SIGNS, SIGN_GLYPHS, SOUTH_NODE, jdFromDate, dateFromJd } from './engine.js';
+
+const $ = id => document.getElementById(id);
+const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+
+/* ---------- colour by the visitor's clock ---------- */
+const hex = h => [1, 3, 5].map(i => parseInt(h.slice(i, i + 2), 16));
+const P = (dark, stars, o) => ({ dark, stars, ...Object.fromEntries(Object.entries(o).map(([k, v]) => [k, hex(v)])) });
+const PALETTES = {
+  night: P(true, 1,    { bg1: '#0a1030', bg2: '#161d45', ink: '#ece5cf', muted: '#a2a7c4', accent: '#dcb866', line: '#2c3566', panel: '#121a40', moonLit: '#f3ead0', moonDark: '#1c2552' }),
+  dawn:  P(false, 0,   { bg1: '#f1d3cb', bg2: '#f9ead6', ink: '#38203c', muted: '#735566', accent: '#9a4a2c', line: '#dcb6ae', panel: '#f8e2d6', moonLit: '#fffaf0', moonDark: '#d9b3b4' }),
+  day:   P(false, 0,   { bg1: '#dde8f2', bg2: '#f4f1e7', ink: '#1a2044', muted: '#535a79', accent: '#85570b', line: '#c3cbd9', panel: '#eef0ee', moonLit: '#fffdf6', moonDark: '#b9c4d6' }),
+  dusk:  P(true, 0.4,  { bg1: '#2a1638', bg2: '#6b3558', ink: '#f6e8ec', muted: '#d0b3c6', accent: '#f1c480', line: '#7a4a70', panel: '#3b1f49', moonLit: '#fbeede', moonDark: '#4a2a5a' }),
+};
+const KEYS = [[0, 'night'], [5, 'night'], [6.25, 'dawn'], [7.25, 'dawn'], [8.75, 'day'], [16.25, 'day'], [17.5, 'dusk'], [18.75, 'dusk'], [20.25, 'night'], [24, 'night']];
+const PREVIEW = { night: 1, dawn: 6.75, day: 12, dusk: 18 };
+const mix = (a, b, t) => a.map((x, i) => Math.round(x + (b[i] - x) * t));
+const lum = c => { const [r, g, b] = c.map(v => { v /= 255; return v <= .03928 ? v / 12.92 : ((v + .055) / 1.055) ** 2.4; }); return .2126 * r + .7152 * g + .0722 * b; };
+const contrast = (a, b) => { const [x, y] = [lum(a), lum(b)].sort((p, q) => q - p); return (x + .05) / (y + .05); };
+function paint(date) {
+  const forced = PREVIEW[location.hash.slice(1)];
+  const h = forced ?? date.getHours() + date.getMinutes() / 60;
+  let i = 0; while (i < KEYS.length - 2 && h >= KEYS[i + 1][0]) i++;
+  const [h0, n0] = KEYS[i], [h1, n1] = KEYS[i + 1];
+  const A = PALETTES[n0], B = PALETTES[n1], t = (h - h0) / (h1 - h0);
+  const out = { bg1: mix(A.bg1, B.bg1, t), bg2: mix(A.bg2, B.bg2, t) };
+  const text = ['ink', 'muted', 'accent', 'line', 'panel', 'moonLit', 'moonDark'];
+  let dark;
+  if (A.dark === B.dark) { for (const k of text) out[k] = mix(A[k], B[k], t); dark = A.dark; }
+  else {
+    // Between a light and a dark palette the ground blends, but the ink keeps to whichever side still reads.
+    const mid = mix(out.bg1, out.bg2, .5);
+    const side = contrast(A.ink, mid) >= contrast(B.ink, mid) ? A : B;
+    for (const k of text) out[k] = side[k];
+    out.panel = mix(out.bg1, out.bg2, .5);
+    dark = side.dark;
+  }
+  const s = document.documentElement.style;
+  const css = { bg1: '--bg1', bg2: '--bg2', ink: '--ink', muted: '--muted', accent: '--accent', line: '--line', panel: '--panel', moonLit: '--moon-lit', moonDark: '--moon-dark' };
+  for (const k in css) s.setProperty(css[k], `rgb(${out[k].join(' ')})`);
+  s.setProperty('color-scheme', dark ? 'dark' : 'light');
+  stars.level = A.stars + (B.stars - A.stars) * t;
+  s.setProperty('--stars', stars.level.toFixed(3));
+  stars.wake();
+}
+
+/* ---------- stars: sparse, slow, night only ---------- */
+const stars = (() => {
+  const cv = $('stars'), ctx = cv.getContext('2d');
+  const still = matchMedia('(prefers-reduced-motion: reduce)');
+  let list = [], w = 0, h = 0, raf = 0, last = 0;
+  let seed = 20261110; const rnd = () => (seed = (seed * 1664525 + 1013904223) >>> 0) / 4294967296;
+  function size() {
+    const dpr = Math.min(devicePixelRatio || 1, 2);
+    w = innerWidth; h = innerHeight; cv.width = w * dpr; cv.height = h * dpr; ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    const n = Math.round(Math.min(220, w * h / 7000));
+    seed = 20261110;
+    list = Array.from({ length: n }, () => ({ x: rnd() * w, y: rnd() * h, r: .35 + rnd() * rnd() * 1.1, a: .35 + rnd() * .55, p: rnd() * 6.283, s: .25 + rnd() * .65, gold: rnd() < .18, tw: rnd() < .6 }));
+    draw(performance.now());
+  }
+  function draw(now) {
+    ctx.clearRect(0, 0, w, h);
+    const tt = still.matches ? 0 : now / 1000;
+    for (const st of list) {
+      const k = st.tw ? .72 + .28 * Math.sin(st.p + tt * st.s) : 1;
+      ctx.globalAlpha = st.a * k;
+      ctx.fillStyle = st.gold ? '#f0d28a' : '#eef1ff';
+      ctx.beginPath(); ctx.arc(st.x, st.y, st.r, 0, 6.283); ctx.fill();
+    }
+  }
+  function loop(now) {
+    raf = 0;
+    if (api.level <= 0 || document.hidden || still.matches) return;
+    if (now - last > 66) { last = now; draw(now); }
+    raf = requestAnimationFrame(loop);
+  }
+  const api = { level: 1, wake() { if (!raf) raf = requestAnimationFrame(loop); } };
+  addEventListener('resize', size); document.addEventListener('visibilitychange', () => api.wake());
+  size();
+  return api;
+})();
+
+/* ---------- formatting ---------- */
+const dms = x => { const m = Math.floor(x * 60 + 1e-9); return `${Math.floor(m / 60)}°${String(m % 60).padStart(2, '0')}′`; };
+const fTime = new Intl.DateTimeFormat(undefined, { hour: 'numeric', minute: '2-digit' });
+const fDay = new Intl.DateTimeFormat(undefined, { month: 'short', day: 'numeric' });
+const fYear = new Intl.DateTimeFormat(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
+const fNow = new Intl.DateTimeFormat(undefined, { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' });
+const dayNum = d => Math.floor((d.getTime() - d.getTimezoneOffset() * 60000) / 86400000);
+function when(jd, now) {
+  const d = dateFromJd(jd), diff = dayNum(d) - dayNum(now);
+  if (diff === 0) return `today, ${fTime.format(d)}`;
+  if (diff === 1) return `tomorrow, ${fTime.format(d)}`;
+  if (diff === -1) return `yesterday, ${fTime.format(d)}`;
+  if (Math.abs(diff) > 300) return fYear.format(d);
+  return `${fDay.format(d)}, ${fTime.format(d)}`;
+}
+const sg = i => `<span class="g" title="${SIGNS[i]}">${SIGN_GLYPHS[i]}</span>`;
+const RX = '<span class="rx" title="retrograde">R<sub>x</sub></span>';
+
+/* ---------- rendering ---------- */
+function moonPath(angle) {
+  const R = 50, k = Math.cos(angle * Math.PI / 180), rx = Math.max(.01, Math.abs(k) * R);
+  if (angle < 1 || angle > 359) return '';
+  const d = `M0 ${-R}A${R} ${R} 0 0 1 0 ${R}A${rx} ${R} 0 0 ${k > 0 ? 0 : 1} 0 ${-R}Z`;
+  $('moon-lit').setAttribute('transform', angle < 180 ? '' : 'scale(-1 1)');
+  return d;
+}
+
+function render(sky, now) {
+  const jd = jdFromDate(now);
+  $('now').textContent = `${fNow.format(now)} · ${fTime.format(now)}`;
+
+  const pos = sky.positions(jd), ev = sky.nextEvents(jd);
+  $('sky').innerHTML = pos.map(p => {
+    const e = ev[p.key === 'snode' ? 'node' : p.key];
+    const nx = [];
+    if (e.ingress) nx.push(`<span>enters ${sg(p.key === 'snode' ? (e.ingress.sign + 6) % 12 : e.ingress.sign)} ${esc(when(e.ingress.jd, now))}</span>`);
+    if (e.station && p.key !== 'snode') nx.push(`<span>stations ${e.station.kind === 'R' ? 'retrograde' : 'direct'} ${esc(when(e.station.jd, now))}</span>`);
+    const showRx = p.retro && p.cls !== 'lum' && p.key !== 'node' && p.key !== 'snode';
+    return `<li><span class="g body" aria-hidden="true">${p.glyph}</span><span class="nm">${p.name}</span>` +
+      `<span class="pos"><b>${dms(p.deg)}</b> ${sg(p.sign)} ${SIGNS[p.sign]}${showRx ? RX : ''}</span>` +
+      `<span class="nx">${nx.join('')}</span></li>`;
+  }).join('');
+
+  const asp = sky.aspects(jd);
+  $('asp').innerHTML = asp.length ? asp.map(x => {
+    let { verb, glyph } = x.aspect, other = x.b;
+    if (x.b.key === 'node' && x.aspect.angle === 180) { verb = 'conjunct'; glyph = '☌'; other = SOUTH_NODE; }
+    const ex = x.exact === null ? (x.applying ? 'not exact on this pass' : '')
+      : x.applying ? `exact ${when(x.exact, now)}` : `was exact ${when(x.exact, now)}`;
+    return `<li class="${x.orb < 1 ? 'tight' : ''}"><span class="gl" aria-hidden="true">${x.a.glyph}${glyph}${other.glyph}</span>` +
+      `<span class="what">${x.a.name} ${verb} ${other.name}</span>` +
+      `<span class="orb"><b>${dms(x.orb)}</b> ${x.applying ? 'applying' : 'separating'}${ex ? ' · ' + esc(ex) : ''}</span></li>`;
+  }).join('') : '<li><span></span><span class="note">No major aspects within orb at the moment.</span></li>';
+
+  const ph = sky.moonPhase(jd), moon = pos[1];
+  $('moon-lit').setAttribute('d', moonPath(ph.angle));
+  $('moon-disc').setAttribute('aria-label', `${ph.name}, ${Math.round(ph.illum * 100)} percent lit`);
+  $('phase-name').textContent = ph.name;
+  $('phase-facts').innerHTML = `${Math.round(ph.illum * 100)}% lit · in ${sg(moon.sign)} ${SIGNS[moon.sign]} at ${dms(moon.deg)}`;
+  const v = sky.voidOfCourse(jd);
+  const lastTxt = v.last ? ` after its ${v.last.aspect.name} to ${v.last.body.name === 'Sun' ? 'the Sun' : v.last.body.name}` : '';
+  $('voc').innerHTML = v.active
+    ? `<b>Void of course</b> until ${esc(when(v.end, now))}, when it enters ${sg(v.enters)} ${SIGNS[v.enters]}`
+    : `Goes <b>void of course</b> ${esc(when(v.start, now))}${lastTxt}, until it enters ${sg(v.enters)} ${SIGNS[v.enters]} ${esc(when(v.end, now))}`;
+  $('phases').innerHTML = ph.next.map(n =>
+    `<li><span class="nm">${n.name}</span><span class="wh">${esc(when(n.jd, now))}</span><span class="wh">${dms(n.deg)} ${sg(n.sign)}</span></li>`).join('');
+}
+
+/* ---------- start ---------- */
+paint(new Date());
+addEventListener('hashchange', () => paint(new Date()));
+try {
+  const tz = new Intl.DateTimeFormat(undefined, { timeZoneName: 'short' }).formatToParts(new Date()).find(p => p.type === 'timeZoneName');
+  if (tz) $('tz').textContent = ` (${tz.value})`;
+} catch (e) { /* no zone name; the sentence reads fine without it */ }
+
+async function start() {
+  const base = new URL('.', import.meta.url);
+  const names = ['sepl_18.se1', 'semo_18.se1', 'seas_18.se1'];
+  const [M, ...bufs] = await Promise.all([
+    createSwissEph({ locateFile: f => new URL('vendor/' + f, base).href }),
+    ...names.map(async n => { const r = await fetch(new URL('ephe/' + n, base)); if (!r.ok) throw new Error(n + ' ' + r.status); return new Uint8Array(await r.arrayBuffer()); }),
+  ]);
+  const sky = new Sky(M, Object.fromEntries(names.map((n, i) => [n, bufs[i]])));
+  $('swe-ver').textContent = sky.version();
+  window.timepoetry = sky;
+  const tick = () => { const now = new Date(); paint(now); render(sky, now); };
+  tick();
+  setInterval(tick, 20000);
+  document.addEventListener('visibilitychange', () => { if (!document.hidden) tick(); });
+}
+start().catch(err => {
+  console.error(err);
+  $('phase-name').textContent = 'The ephemeris did not load';
+  $('phase-facts').textContent = 'Check your connection and reload the page.';
+  for (const id of ['sky', 'asp']) $(id).innerHTML = '<li><span></span><span class="note">Nothing to show until the ephemeris loads.</span></li>';
+});
+</script>
+</body>
+</html>

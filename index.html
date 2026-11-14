@@ -168,11 +168,11 @@ footer p { max-width: 65ch; }
         <span class="d">Send your question and birth details by message. I answer in writing.</span>
         <span class="go">On Popcall →</span>
       </a>
-      <div class="door soon" id="planners">
+      <a class="door" id="planners" href="https://www.amazon.ca/dp/B0HR788HTP">
         <span class="t">The Sky in 2027</span>
         <span class="d">An astrological planner and almanac, in print.</span>
-        <span class="go">Coming soon to Amazon</span>
-      </div>
+        <span class="go" id="planners-go">On Amazon →</span>
+      </a>
     </div>
   </section>
 
@@ -332,6 +332,47 @@ function render(sky, now) {
     : `Goes <b>void of course</b> ${esc(when(v.start, now))}${lastTxt}, until it enters ${sg(v.enters)} ${SIGNS[v.enters]} ${esc(when(v.end, now))}`;
   $('phases').innerHTML = ph.next.map(n =>
     `<li><span class="nm">${n.name}</span><span class="wh">${esc(when(n.jd, now))}</span><span class="wh">${dms(n.deg)} ${sg(n.sign)}</span></li>`).join('');
+}
+
+/* ---------- the almanac on Amazon: the visitor's own marketplace ---------- */
+// The country is read from the device's time zone, then from its language setting.
+// Neither asks for permission or sends anything anywhere.
+const ALMANAC = 'B0HR788HTP';
+// Marketplaces where the listing is live. A country that is not here gets HOME.
+// To add one: US: 'amazon.com', GB: 'amazon.co.uk', DE: 'amazon.de', FR: 'amazon.fr', ES: 'amazon.es', IT: 'amazon.it',
+// NL: 'amazon.nl', PL: 'amazon.pl', SE: 'amazon.se', BE: 'amazon.com.be', IE: 'amazon.ie', AU: 'amazon.com.au', JP: 'amazon.co.jp'
+const MARKETS = { CA: 'amazon.ca' };
+const HOME = 'CA';
+const CA_ZONES = 'Toronto Vancouver Edmonton Winnipeg Halifax St_Johns Regina Moncton Montreal Whitehorse Yellowknife Iqaluit Glace_Bay Goose_Bay Thunder_Bay Nipigon Rainy_River Atikokan Swift_Current Cambridge_Bay Rankin_Inlet Resolute Inuvik Dawson Dawson_Creek Fort_Nelson Creston Blanc-Sablon Pangnirtung Coral_Harbour'.split(' ');
+const US_ZONES = 'New_York Chicago Denver Los_Angeles Phoenix Anchorage Detroit Boise Juneau Sitka Nome Yakutat Metlakatla Adak Menominee'.split(' ');
+const OTHER_ZONES = {
+  'Pacific/Honolulu': 'US', 'Europe/London': 'GB', 'Europe/Belfast': 'GB', 'Europe/Dublin': 'IE',
+  'Europe/Berlin': 'DE', 'Europe/Busingen': 'DE', 'Europe/Vienna': 'DE', 'Europe/Zurich': 'DE',
+  'Europe/Paris': 'FR', 'Europe/Brussels': 'BE', 'Europe/Madrid': 'ES', 'Atlantic/Canary': 'ES', 'Europe/Rome': 'IT',
+  'Europe/Amsterdam': 'NL', 'Europe/Warsaw': 'PL', 'Europe/Stockholm': 'SE', 'Asia/Tokyo': 'JP', 'Pacific/Auckland': 'AU',
+};
+function visitorCountry() {
+  let zone = '';
+  try { zone = Intl.DateTimeFormat().resolvedOptions().timeZone || ''; } catch (e) { /* no zone; fall through to language */ }
+  if (zone.startsWith('America/')) {
+    const city = zone.slice(8);
+    if (CA_ZONES.includes(city)) return 'CA';
+    if (US_ZONES.includes(city) || /^(Indiana|Kentucky|North_Dakota)\//.test(city)) return 'US';
+  }
+  if (zone.startsWith('Australia/')) return 'AU';
+  if (OTHER_ZONES[zone]) return OTHER_ZONES[zone];
+  for (const lang of navigator.languages || [navigator.language || '']) {
+    const m = /^[a-z]{2,3}(?:-[A-Za-z]{4})?-([A-Za-z]{2})\b/.exec(lang);
+    if (m) return m[1].toUpperCase();
+  }
+  return '';
+}
+{
+  const country = visitorCountry(), host = MARKETS[country] || MARKETS[HOME];
+  const door = $('planners');
+  door.href = `https://www.${host}/dp/${ALMANAC}`;
+  door.dataset.country = country;
+  $('planners-go').textContent = `On ${host} →`;
 }
 
 /* ---------- start ---------- */

@@ -1,0 +1,653 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Transit Cyclogram</title>
+<meta name="description" content="A transit cyclogram: the zodiac around a wheel and time running outward, so every planet draws a spiral. Turn the wheel to add or take away time. Computed live with the Swiss Ephemeris.">
+<style>
+/* Layout: the same left-aligned almanac column as the home page. Range, then the wheel, then places and stations as ruled rows. */
+@font-face { font-family: "EB Garamond"; font-style: normal; font-weight: 400 800; font-display: swap; src: url("../fonts/eb-garamond-latin-wght-normal.woff2") format("woff2"); }
+@font-face { font-family: "EB Garamond"; font-style: italic; font-weight: 400 800; font-display: swap; src: url("../fonts/eb-garamond-latin-wght-italic.woff2") format("woff2"); }
+@font-face { font-family: "Noto Sans Symbols"; font-display: swap; src: url("../fonts/noto-sans-symbols-symbols-400-normal.woff2") format("woff2"); }
+@font-face { font-family: "Noto Sans Symbols 2"; font-display: swap; src: url("../fonts/noto-sans-symbols-2-symbols-400-normal.woff2") format("woff2"); }
+:root {
+  /* Night (navy and gold) is the resting palette; theme.js repaints these tokens by the visitor's clock. */
+  --bg1: #0a1030; --bg2: #161d45;
+  --ink: #ece5cf; --muted: #a2a7c4; --accent: #dcb866; --line: #2c3566; --panel: #121a40;
+  --stars: 1;
+  /* One colour per body, for a dark ground. The light-ground set follows. */
+  --warn: #ff9d8a;
+  --c-sun: #f2c14e; --c-moon: #aab1d2; --c-mercury: #5fd0b8; --c-venus: #f08cc4; --c-mars: #ff6b5e; --c-jupiter: #a98bff;
+  --c-saturn: #c9b288; --c-uranus: #5cc8f5; --c-neptune: #7f9bff; --c-pluto: #d0728f; --c-node: #9bd06a; --c-chiron: #f0a45c;
+  --serif: "EB Garamond", Garamond, "Iowan Old Style", "Palatino Linotype", Georgia, serif;
+  --glyph: "Noto Sans Symbols", "Noto Sans Symbols 2", "Apple Symbols", "Segoe UI Symbol", "DejaVu Sans", sans-serif;
+  color-scheme: dark;
+}
+:root[data-ground="light"] {
+  --warn: #a3261a;
+  --c-sun: #a87200; --c-moon: #6f7698; --c-mercury: #1a7a69; --c-venus: #b3357f; --c-mars: #bd2f26; --c-jupiter: #6243bd;
+  --c-saturn: #65563a; --c-uranus: #0f7aa8; --c-neptune: #2749bd; --c-pluto: #7a1f3d; --c-node: #44701f; --c-chiron: #a85a14;
+}
+* { box-sizing: border-box; }
+html { min-height: 100%; background: var(--bg2); }
+body {
+  min-height: 100vh; margin: 0;
+  background: linear-gradient(180deg, var(--bg1), var(--bg2)) fixed;
+  color: var(--ink);
+  font-family: var(--serif); font-size: 1.1875rem; line-height: 1.45;
+  font-variant-numeric: lining-nums tabular-nums;
+  -webkit-text-size-adjust: 100%;
+}
+#stars { position: fixed; inset: 0; width: 100%; height: 100%; pointer-events: none; opacity: var(--stars); z-index: 0; }
+.page {
+  position: relative; z-index: 1;
+  max-width: 46rem; margin: 0 auto;
+  padding-left: max(20px, env(safe-area-inset-left, 0px)); padding-right: max(20px, env(safe-area-inset-right, 0px));
+  padding-block: calc(2.5rem + env(safe-area-inset-top, 0px)) calc(3rem + env(safe-area-inset-bottom, 0px));
+  display: flex; flex-direction: column; gap: 2.75rem;
+}
+a { color: inherit; }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; border-radius: 2px; }
+.g { font-family: var(--glyph); font-style: normal; font-weight: 400; }
+h1, h2, p, ul, ol { margin: 0; }
+ul, ol { list-style: none; padding: 0; }
+[hidden] { display: none !important; }
+
+.mast { display: flex; flex-direction: column; gap: .5rem; }
+.mast .home { font-size: 1.6rem; font-style: italic; line-height: 1; text-decoration: none; align-self: flex-start; }
+.mast .home span { color: var(--accent); }
+.mast h1 { font-size: clamp(2.5rem, 10vw, 4rem); font-style: italic; font-weight: 400; line-height: 1.02; letter-spacing: -.015em; text-wrap: balance; }
+.mast .now { color: var(--muted); font-size: 1.05rem; max-width: 34rem; }
+
+h2, .lab { font-size: .85rem; font-weight: 500; letter-spacing: .16em; text-transform: uppercase; color: var(--accent); }
+section { display: flex; flex-direction: column; gap: .9rem; min-width: 0; }
+.note { color: var(--muted); font-size: 1rem; min-height: 1.45em; }
+.note.err { color: var(--warn); }
+
+/* Controls, in the same square, ruled manner as the doors on the home page */
+.range { display: flex; flex-wrap: wrap; align-items: flex-end; gap: .75rem 1rem; }
+.field { display: flex; flex-direction: column; gap: .25rem; }
+.field label { font-size: .8rem; letter-spacing: .14em; text-transform: uppercase; color: var(--muted); }
+input[type="date"], .btn, .chip {
+  font: inherit; font-size: 1.05rem; line-height: 1.2; color: var(--ink);
+  background: var(--panel); border: 1px solid var(--line); border-radius: 0; min-height: 2.6rem; padding: .4rem .7rem;
+}
+input[type="date"] { font-variant-numeric: lining-nums tabular-nums; }
+.btn, .chip { cursor: pointer; }
+.btn:hover, .chip:hover { border-color: var(--accent); }
+.btn.primary { border-color: var(--accent); color: var(--accent); font-style: italic; padding-inline: 1.1rem; }
+.btn.text { background: none; border-color: transparent; color: var(--muted); text-decoration: underline; text-underline-offset: .2em; min-height: 0; padding: .1rem 0; font-size: 1rem; }
+.btn.text:hover { color: var(--accent); border-color: transparent; }
+.spans, .chips, .dial { display: flex; flex-wrap: wrap; align-items: center; gap: .4rem; }
+.chip { display: inline-flex; align-items: center; gap: .4rem; font-size: 1rem; min-height: 2.25rem; padding: .25rem .65rem; }
+.chip .g { font-size: 1.05rem; line-height: 1; color: var(--c); width: 1.1em; text-align: center; }
+.chip[aria-pressed="false"] { background: none; border-style: dashed; color: var(--muted); }
+.chip[aria-pressed="false"] .g { color: var(--muted); }
+.chip.mode[aria-pressed="true"] { border-color: var(--accent); color: var(--accent); }
+.chip[disabled] { cursor: not-allowed; opacity: .5; }
+.dial .lab { color: var(--muted); margin-right: .35rem; }
+
+/* The wheel */
+.wheelwrap { position: relative; width: min(100%, max(20rem, 84vh)); aspect-ratio: 1; margin-inline: auto; }
+canvas#wheel { position: absolute; inset: 0; width: 100%; height: 100%; touch-action: none; cursor: grab; border-radius: 50%; }
+canvas#wheel.dragging { cursor: grabbing; }
+.under { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: .25rem 1rem; color: var(--muted); font-size: 1rem; }
+.scrub { display: flex; flex-direction: column; gap: .3rem; border-top: 1px solid var(--line); padding-top: .9rem; }
+.scrub label { color: var(--muted); }
+.scrub input[type="range"] { width: 100%; accent-color: var(--accent); min-height: 1.75rem; margin: 0; }
+.scrub .when { font-size: 1.5rem; font-style: italic; line-height: 1.15; }
+
+/* Ruled rows, as on the home page */
+.rows { border-top: 1px solid var(--line); }
+.rows li { border-bottom: 1px solid var(--line); padding: .5rem 0; display: grid; column-gap: .9rem; align-items: baseline; }
+.rows .g.body { font-size: 1.2rem; text-align: center; }
+.sky li { grid-template-columns: 1.6rem 6.2rem minmax(0, 1fr); }
+.pos b { font-weight: 500; }
+.pos .g { margin: 0 .15em; }
+.rx { font-style: italic; color: var(--accent); margin-left: .35em; }
+.rx sub { font-size: .7em; }
+.st li { grid-template-columns: 1.6rem minmax(0, 13.5rem) minmax(0, 1fr) auto; }
+.st .wh { color: var(--muted); font-size: .98rem; text-align: right; }
+.stbox { max-height: 30rem; overflow-y: auto; }
+
+footer { color: var(--muted); font-size: .95rem; display: flex; flex-direction: column; gap: .6rem; border-top: 1px solid var(--line); padding-top: 1.25rem; }
+footer p { max-width: 65ch; }
+
+@media (max-width: 640px) {
+  body { font-size: 1.125rem; }
+  .page { gap: 2.4rem; padding-block: calc(1.75rem + env(safe-area-inset-top, 0px)) calc(2.5rem + env(safe-area-inset-bottom, 0px)); }
+  .st li { grid-template-columns: 1.6rem minmax(0, 1fr); }
+  .st .pos, .st .wh { grid-column: 2; text-align: left; }
+}
+</style>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='6' fill='%230a1030'/%3E%3Cpath d='M20 5a11 11 0 1 0 0 22 13 13 0 0 1 0-22z' fill='%23dcb866'/%3E%3C/svg%3E">
+</head>
+<body>
+<canvas id="stars" aria-hidden="true"></canvas>
+<div class="page">
+  <header class="mast">
+    <a class="home" href="../" aria-label="timepoetry home">time<span>poetry</span></a>
+    <h1>Transit Cyclogram</h1>
+    <p class="now">The zodiac runs around the wheel and time runs outward from the centre, so each planet draws a spiral. Turn the wheel to the right to add time, to the left to take it away.</p>
+  </header>
+
+  <section aria-labelledby="h-range">
+    <h2 id="h-range">The range</h2>
+    <form class="range" id="rangeForm" novalidate>
+      <div class="field"><label for="from">From</label><input type="date" id="from" required></div>
+      <div class="field"><label for="to">To</label><input type="date" id="to" required></div>
+      <button class="btn primary" type="submit" id="draw">Draw</button>
+    </form>
+    <div class="spans" role="group" aria-label="Range length from the start date">
+      <button class="btn" type="button" data-span="1m" id="p1m">1 month</button>
+      <button class="btn" type="button" data-span="3m" id="p3m">3 months</button>
+      <button class="btn" type="button" data-span="1y" id="p1y">1 year</button>
+      <button class="btn" type="button" data-span="5y" id="p5y">5 years</button>
+      <button class="btn" type="button" data-span="12y" id="p12y">12 years</button>
+    </div>
+    <p class="note" id="msg" role="status">Loading the ephemeris…</p>
+  </section>
+
+  <section aria-labelledby="h-wheel">
+    <h2 id="h-wheel">The wheel</h2>
+    <div class="chips" id="chips" role="group" aria-label="Bodies shown"></div>
+    <div class="wheelwrap">
+      <canvas id="wheel" tabindex="0" role="img" aria-label="Transit cyclogram wheel. Turn it clockwise to add time and counterclockwise to take time away, or use the left and right arrow keys."></canvas>
+    </div>
+    <div class="dial" role="group" aria-labelledby="dialLabel">
+      <span class="lab" id="dialLabel">Turning the wheel</span>
+      <button class="chip mode" type="button" id="mode-extend" data-mode="extend" aria-pressed="true">Adds time</button>
+      <button class="chip mode" type="button" id="mode-shift" data-mode="shift" aria-pressed="false">Moves through time</button>
+      <button class="chip mode" type="button" id="mode-rotate" data-mode="rotate" aria-pressed="false">Rotates the zodiac</button>
+    </div>
+    <div class="under">
+      <span id="topdeg">&nbsp;</span>
+      <button class="btn text" type="button" id="reset">Put Aries back on the left</button>
+    </div>
+    <div class="scrub">
+      <label class="lab" for="scrub">Date on the wheel</label>
+      <input type="range" id="scrub" min="0" max="2000" value="0" step="1">
+      <div class="when" id="when">&nbsp;</div>
+    </div>
+  </section>
+
+  <section aria-labelledby="h-sky">
+    <h2 id="h-sky">Where everything is on that date</h2>
+    <ul class="rows sky" id="readout"><li><span></span><span class="note">Loading…</span></li></ul>
+  </section>
+
+  <section aria-labelledby="h-st">
+    <h2 id="h-st">Stations in the range</h2>
+    <div class="stbox" id="stbox" tabindex="0">
+      <ul class="rows st" id="stations"><li><span></span><span class="note">Stations appear here once the wheel is drawn.</span></li></ul>
+    </div>
+  </section>
+
+  <footer>
+    <p>Tropical zodiac, geocentric, true node. A heavier line is a retrograde stretch; a ring marks a station retrograde and a solid dot a station direct. Chiron is available from 1800 to 2399. All times are in your own time zone<span id="tz"></span>.</p>
+    <p>Computed in your browser with the <a href="https://www.astro.com/swisseph/">Swiss Ephemeris</a> <span id="swe-ver"></span>, © Astrodienst AG, used under the AGPL through the <a href="https://github.com/kuntayerkus/swisseph-wasm">@kuntay/swisseph</a> WebAssembly build. This page's own code is under the same licence, and its <a href="https://github.com/adriennnne/timepoetry.com">source is on GitHub</a>.</p>
+  </footer>
+</div>
+
+<script type="module">
+import createSwissEph from '../vendor/swisseph.mjs';
+import { Sky } from '../engine.js';
+import { startTheme } from '../theme.js';
+import { BODIES, SIGNS, SIGN_GLYPHS, Tracks, msToJd, jdToMs, place } from './cyclogram.js';
+
+const $ = id => document.getElementById(id);
+const msgEl = $('msg');
+function setMsg(text, err) { msgEl.textContent = text; msgEl.classList.toggle('err', !!err); }
+
+// Remembered per browser: which bodies are shown, the zodiac's rotation, what turning does.
+const store = {
+  get() { try { return JSON.parse(localStorage.getItem('cyclogram') || '{}') || {}; } catch (e) { return {}; } },
+  set(o) { try { localStorage.setItem('cyclogram', JSON.stringify(o)); } catch (e) { /* storage unavailable */ } },
+};
+const saved = store.get();
+
+const DAY = 86400000;
+const pad = n => String(n).padStart(2, '0');
+const toInput = d => `${String(d.getFullYear()).padStart(4, '0')}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+function fromInput(v) {
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(v || '');
+  if (!m) return null;
+  const d = new Date(+m[1], +m[2] - 1, +m[3]);
+  return isNaN(d) ? null : d;
+}
+function addSpan(d, span) {
+  const n = parseInt(span, 10), r = new Date(d);
+  if (span.endsWith('m')) r.setMonth(r.getMonth() + n); else r.setFullYear(r.getFullYear() + n);
+  r.setDate(r.getDate() - 1);
+  return r;
+}
+
+// Default: one month starting today. Turning the wheel takes it from there.
+const today = new Date(); today.setHours(0, 0, 0, 0);
+$('from').value = toInput(today);
+$('to').value = toInput(addSpan(today, '1m'));
+
+let tracks = null;     // Tracks instance, once the ephemeris has loaded
+let chironOk = false;
+let model = null;      // { ms0, ms1, jd0, jd1, tracks: {key: track}, stations: [] }
+let rot = typeof saved.rot === 'number' ? saved.rot : 0;   // zodiac degree sitting at the left (9 o'clock)
+let on = Object.assign({}, saved.on || {});
+let scrubFrac = 0;
+let mode = ['extend', 'shift', 'rotate'].includes(saved.mode) ? saved.mode : 'extend';   // what turning the wheel does
+let dialAngle = 90;    // where the grip sits on the rim, in screen degrees
+
+const canvas = $('wheel');
+const ctx = canvas.getContext('2d');
+let W = 0, dpr = 1;
+
+const css = name => getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+let C = {};
+function readColors() {
+  C = { ink: css('--ink'), muted: css('--muted'), line: css('--line'), panel: css('--panel'), accent: css('--accent') };
+  for (const b of BODIES) C[b.key] = css('--c-' + b.key);
+}
+
+const SYM = '"Noto Sans Symbols", "Noto Sans Symbols 2", "Apple Symbols", "Segoe UI Symbol", "DejaVu Sans", sans-serif';
+const SERIF = '"EB Garamond", Garamond, "Iowan Old Style", "Palatino Linotype", Georgia, serif';
+
+// Geometry. Zodiac runs counterclockwise; `rot` is the longitude at 9 o'clock.
+function geom() {
+  const R = W / 2;
+  const grip = Math.max(4, R * 0.014), rSignOut = R - 2 * grip - 4, rSignIn = rSignOut - R * 0.085;
+  return { cx: R, cy: R, R, grip, rSignOut, rSignIn, rOut: rSignIn - R * 0.035, rIn: R * 0.15 };
+}
+const phi = lon => Math.PI + (lon - rot) * Math.PI / 180;
+function pt(g, lon, r) { const a = phi(lon); return [g.cx + r * Math.cos(a), g.cy - r * Math.sin(a)]; }
+function rAt(g, ms) { return g.rIn + (ms - model.ms0) / (model.ms1 - model.ms0) * (g.rOut - g.rIn); }
+
+// Calendar rings: pick the unit that gives a readable number of them.
+function timeTicks() {
+  const { ms0, ms1 } = model, days = (ms1 - ms0) / DAY, out = [];
+  const d0 = new Date(ms0);
+  const MON = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+  if (days <= 16) {
+    for (let d = new Date(d0.getFullYear(), d0.getMonth(), d0.getDate()); d <= ms1; d.setDate(d.getDate() + 1)) out.push({ ms: +d, label: `${MON[d.getMonth()]} ${d.getDate()}` });
+  } else if (days <= 100) {
+    for (let d = new Date(d0.getFullYear(), d0.getMonth(), d0.getDate()); d <= ms1; d.setDate(d.getDate() + 7)) out.push({ ms: +d, label: `${MON[d.getMonth()]} ${d.getDate()}` });
+  } else if (days <= 365 * 6) {
+    const stepM = days <= 550 ? 1 : days <= 365 * 3 ? 3 : 6;
+    for (let d = new Date(d0.getFullYear(), d0.getMonth(), 1); d <= ms1; d.setMonth(d.getMonth() + 1)) {
+      if (d.getMonth() % stepM) continue;
+      out.push({ ms: +d, label: d.getMonth() === 0 ? String(d.getFullYear()) : MON[d.getMonth()], major: d.getMonth() === 0 });
+    }
+  } else {
+    const stepY = days <= 365 * 16 ? 1 : days <= 365 * 32 ? 2 : 5;
+    for (let y = d0.getFullYear(); ; y++) {
+      const d = new Date(y, 0, 1); if (+d > ms1) break;
+      if (y % stepY === 0) out.push({ ms: +d, label: String(y), major: true });
+    }
+  }
+  return out.filter(t => t.ms >= ms0 && t.ms <= ms1);
+}
+
+function draw() {
+  if (!W) return;
+  const g = geom();
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  ctx.clearRect(0, 0, W, W);
+  // Disc
+  ctx.fillStyle = C.panel; ctx.beginPath(); ctx.arc(g.cx, g.cy, g.rSignOut, 0, Math.PI * 2); ctx.fill();
+  ctx.strokeStyle = C.line; ctx.lineWidth = 1;
+  for (const r of [g.rSignOut, g.rSignIn]) { ctx.beginPath(); ctx.arc(g.cx, g.cy, r, 0, Math.PI * 2); ctx.stroke(); }
+  // Sign spokes and degree ticks
+  for (let d = 0; d < 360; d += 5) {
+    const sign = d % 30 === 0, ten = d % 10 === 0;
+    const [x1, y1] = pt(g, d, g.rSignIn), [x2, y2] = pt(g, d, sign ? g.rSignOut : g.rSignIn + (g.rSignOut - g.rSignIn) * (ten ? 0.3 : 0.16));
+    ctx.strokeStyle = C.line; ctx.lineWidth = sign ? 1.2 : 0.8;
+    ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x2, y2); ctx.stroke();
+    if (sign) {
+      const [a, b] = pt(g, d, g.rIn * 0.55), [c, e] = pt(g, d, g.rSignIn);
+      ctx.lineWidth = 1; ctx.beginPath(); ctx.moveTo(a, b); ctx.lineTo(c, e); ctx.stroke();
+    }
+  }
+  ctx.fillStyle = C.accent; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  ctx.font = `${Math.max(13, g.R * 0.058)}px ${SYM}`;
+  for (let s = 0; s < 12; s++) { const [x, y] = pt(g, s * 30 + 15, (g.rSignIn + g.rSignOut) / 2 + g.R * 0.008); ctx.fillText(SIGN_GLYPHS[s], x, y); }
+
+  // Grip on the rim: shows the wheel is a dial and follows the turn
+  if (mode !== 'rotate') {
+    const a = dialAngle * Math.PI / 180, kr = g.R - g.grip - 1;
+    ctx.beginPath(); ctx.arc(g.cx + kr * Math.cos(a), g.cy - kr * Math.sin(a), g.grip, 0, Math.PI * 2);
+    ctx.fillStyle = C.accent; ctx.fill();
+  }
+
+  if (!model) return;
+
+  // Time rings
+  const ticks = timeTicks();
+  ctx.lineWidth = 1; ctx.strokeStyle = C.line;
+  for (const t of ticks) {
+    ctx.setLineDash(t.major ? [] : [1.5, 5]);
+    ctx.beginPath(); ctx.arc(g.cx, g.cy, rAt(g, t.ms), 0, Math.PI * 2); ctx.stroke();
+  }
+  ctx.setLineDash([]);
+  for (const r of [g.rIn, g.rOut]) { ctx.beginPath(); ctx.arc(g.cx, g.cy, r, 0, Math.PI * 2); ctx.stroke(); }
+
+  // Tracks. Moon first so the slower bodies sit on top of it.
+  const order = BODIES.slice().sort((a, b) => (a.key === 'moon' ? -1 : 0) - (b.key === 'moon' ? -1 : 0));
+  const span = model.jd1 - model.jd0, dr = g.rOut - g.rIn;
+  ctx.lineJoin = 'round'; ctx.lineCap = 'round';
+  for (const b of order) {
+    const tr = model.tracks[b.key];
+    if (!tr || !on[b.key]) continue;
+    const base = b.key === 'moon' ? 1.1 : 1.6;
+    ctx.strokeStyle = C[b.key];
+    ctx.globalAlpha = b.key === 'moon' ? 0.85 : 1;
+    ctx.lineWidth = base;
+    ctx.beginPath();
+    for (let i = 0; i < tr.n; i++) {
+      const r = g.rIn + (tr.jd[i] - model.jd0) / span * dr, a = phi(tr.lon[i]);
+      const x = g.cx + r * Math.cos(a), y = g.cy - r * Math.sin(a);
+      if (i) ctx.lineTo(x, y); else ctx.moveTo(x, y);
+    }
+    ctx.stroke();
+    if (b.stations) {            // retrograde stretches drawn heavier
+      ctx.lineWidth = base + 1.8;
+      ctx.beginPath();
+      let pen = false;
+      for (let i = 0; i < tr.n; i++) {
+        if (tr.spd[i] < 0) {
+          const r = g.rIn + (tr.jd[i] - model.jd0) / span * dr, a = phi(tr.lon[i]);
+          const x = g.cx + r * Math.cos(a), y = g.cy - r * Math.sin(a);
+          if (pen) ctx.lineTo(x, y); else { ctx.moveTo(x, y); pen = true; }
+        } else pen = false;
+      }
+      ctx.stroke();
+    }
+    ctx.globalAlpha = 1;
+  }
+  // Station markers: ring = turns retrograde, solid = turns direct
+  for (const s of model.stations) {
+    if (!on[s.key]) continue;
+    const [x, y] = pt(g, s.lon, rAt(g, jdToMs(s.jd)));
+    ctx.beginPath(); ctx.arc(x, y, 3.2, 0, Math.PI * 2);
+    ctx.fillStyle = s.type === 'D' ? C[s.key] : C.panel; ctx.fill();
+    ctx.strokeStyle = C[s.key]; ctx.lineWidth = 1.4; ctx.stroke();
+  }
+
+  // Ring labels along 12 o'clock (fixed to the screen, not to the zodiac)
+  ctx.font = `500 ${Math.max(12, Math.min(15, g.R * 0.042))}px ${SERIF}`;
+  ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  let lastY = Infinity;
+  for (const t of ticks) {
+    const y = g.cy - rAt(g, t.ms);
+    if (lastY - y < 15) continue;
+    lastY = y;
+    ctx.lineWidth = 4; ctx.strokeStyle = C.panel; ctx.strokeText(t.label, g.cx, y);
+    ctx.fillStyle = t.major ? C.ink : C.muted; ctx.fillText(t.label, g.cx, y);
+  }
+
+  // Selected date: ring, plus a dot and glyph on every visible body
+  const ms = model.ms0 + scrubFrac * (model.ms1 - model.ms0), rs = rAt(g, ms);
+  ctx.strokeStyle = C.accent; ctx.lineWidth = 1.5; ctx.setLineDash([5, 4]);
+  ctx.beginPath(); ctx.arc(g.cx, g.cy, rs, 0, Math.PI * 2); ctx.stroke(); ctx.setLineDash([]);
+  ctx.font = `${Math.max(13, g.R * 0.05)}px ${SYM}`;
+  for (const p of current) {
+    if (!on[p.key]) continue;
+    const [x, y] = pt(g, p.lon, rs);
+    ctx.beginPath(); ctx.arc(x, y, 4, 0, Math.PI * 2); ctx.fillStyle = C[p.key]; ctx.fill();
+    ctx.strokeStyle = C.panel; ctx.lineWidth = 1.5; ctx.stroke();
+    const off = rs > g.rOut - g.R * 0.07 ? -g.R * 0.05 : g.R * 0.05;
+    const [gx, gy] = pt(g, p.lon, rs + off);
+    ctx.lineWidth = 3.5; ctx.strokeStyle = C.panel; ctx.strokeText(p.glyph, gx, gy);
+    ctx.fillStyle = C[p.key]; ctx.fillText(p.glyph, gx, gy);
+  }
+}
+
+let raf = 0;
+function requestDraw() { if (!raf) raf = requestAnimationFrame(() => { raf = 0; draw(); }); }
+
+function resize() {
+  const rect = canvas.getBoundingClientRect();
+  if (!rect.width) return;
+  dpr = Math.min(window.devicePixelRatio || 1, 3);
+  W = rect.width;
+  canvas.width = Math.round(W * dpr); canvas.height = Math.round(W * dpr);
+  draw();
+}
+new ResizeObserver(resize).observe(canvas);
+
+// ---- Turning the wheel --------------------------------------------------
+function updateTop() {
+  const p = place(rot - 90);
+  $('topdeg').textContent = `At the top: ${p.text} ${SIGNS[p.sign]}`;
+}
+function setRot(v, save) {
+  rot = ((v % 360) + 360) % 360;
+  updateTop(); requestDraw();
+  if (save) persist();
+}
+function setMode(m) {
+  mode = m;
+  for (const b of document.querySelectorAll('.chip.mode')) b.setAttribute('aria-pressed', String(b.dataset.mode === m));
+  requestDraw();
+}
+for (const b of document.querySelectorAll('.chip.mode')) b.addEventListener('click', () => { setMode(b.dataset.mode); persist(); });
+
+const MAX_DAYS = 50 * 365;
+function rangeNow() {
+  const a = fromInput($('from').value), b = fromInput($('to').value);
+  if (!a || !b || +b < +a) return null;
+  return { from: a, days: Math.round((+b - +a) / DAY) + 1 };
+}
+// Show `days` whole days starting at `from`. `quick` skips the station list while the wheel is moving.
+function setRange(from, days, quick) {
+  days = Math.max(2, Math.min(MAX_DAYS, days));
+  if (from.getFullYear() < 100 || from.getFullYear() > 2850) return;
+  const to = new Date(from); to.setDate(to.getDate() + days - 1);
+  const end = new Date(to); end.setDate(end.getDate() + 1);
+  $('from').value = toInput(from); $('to').value = toInput(to);
+  const keep = model ? model.ms0 + scrubFrac * (model.ms1 - model.ms0) : null;
+  try { build(+from, +end, keep, quick); } catch (err) { setMsg('The calculation failed: ' + (err && err.message ? err.message : err), true); }
+}
+
+let drag = null, turnRaf = 0;
+function pointerAngle(e) {
+  const r = canvas.getBoundingClientRect();
+  return Math.atan2(-(e.clientY - (r.top + r.height / 2)), e.clientX - (r.left + r.width / 2)) * 180 / Math.PI;
+}
+// Clockwise is forward. Adding time: one full turn doubles the range, one turn back halves it.
+// Moving through time: one full turn slides the range by its own length.
+function applyTurn() {
+  turnRaf = 0;
+  if (!drag || !drag.range) return;
+  const turns = -drag.acc / 360;
+  if (mode === 'extend') setRange(drag.range.from, Math.round(drag.range.days * Math.pow(2, turns)), true);
+  else {
+    const f = new Date(drag.range.from); f.setDate(f.getDate() + Math.round(turns * drag.range.days));
+    setRange(f, drag.range.days, true);
+  }
+}
+canvas.addEventListener('pointerdown', e => {
+  drag = { last: pointerAngle(e), acc: 0, rot, range: tracks ? rangeNow() : null };
+  canvas.setPointerCapture(e.pointerId); canvas.classList.add('dragging');
+});
+canvas.addEventListener('pointermove', e => {
+  if (!drag) return;
+  const a = pointerAngle(e), d = ((a - drag.last + 540) % 360) - 180;
+  drag.last = a; drag.acc += d;
+  if (mode === 'rotate') setRot(drag.rot - drag.acc, false);   // the grabbed degree follows the pointer
+  else { dialAngle += d; if (!turnRaf) turnRaf = requestAnimationFrame(applyTurn); requestDraw(); }
+});
+function endDrag() {
+  if (!drag) return;
+  if (turnRaf) { cancelAnimationFrame(turnRaf); applyTurn(); }
+  const timed = mode !== 'rotate' && drag.range && drag.acc !== 0;
+  drag = null; canvas.classList.remove('dragging');
+  if (timed && model) renderStations();
+  persist();
+}
+canvas.addEventListener('pointerup', endDrag);
+canvas.addEventListener('pointercancel', endDrag);
+canvas.addEventListener('keydown', e => {
+  if (e.key !== 'ArrowLeft' && e.key !== 'ArrowRight') return;
+  e.preventDefault();
+  const dir = e.key === 'ArrowRight' ? 1 : -1;
+  if (mode === 'rotate') { setRot(rot - dir * (e.shiftKey ? 1 : 5), true); return; }
+  const r = tracks ? rangeNow() : null;
+  if (!r) return;
+  const n = dir * (e.shiftKey ? 30 : 1);       // a day, or thirty with shift
+  dialAngle -= dir * (e.shiftKey ? 30 : 6);
+  if (mode === 'extend') setRange(r.from, r.days + n, false);
+  else { r.from.setDate(r.from.getDate() + n); setRange(r.from, r.days, false); }
+});
+$('reset').addEventListener('click', () => setRot(0, true));
+
+// ---- Rows ---------------------------------------------------------------
+let current = [];
+const fmtWhen = new Intl.DateTimeFormat(undefined, { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric', hour: 'numeric', minute: '2-digit' });
+const fmtStation = new Intl.DateTimeFormat(undefined, { year: 'numeric', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
+const byKey = Object.fromEntries(BODIES.map(b => [b.key, b]));
+const RX = '<span class="rx" title="retrograde">R<sub>x</sub></span>';
+function posHTML(lon) {
+  const p = place(lon);
+  return `<b>${p.text}</b> <span class="g" title="${SIGNS[p.sign]}">${SIGN_GLYPHS[p.sign]}</span> ${SIGNS[p.sign]}`;
+}
+const bodyGlyph = b => `<span class="g body" aria-hidden="true" style="color:var(--c-${b.key})">${b.glyph}</span>`;
+const emptyRow = text => `<li><span></span><span class="note">${text}</span></li>`;
+
+function updateReadout() {
+  if (!model) return;
+  const ms = model.ms0 + scrubFrac * (model.ms1 - model.ms0), jd = msToJd(ms);
+  $('when').textContent = fmtWhen.format(new Date(ms));
+  current = [];
+  for (const b of BODIES) {
+    if (!model.tracks[b.key]) continue;
+    try { const p = tracks.posAt(b.id, jd); current.push({ key: b.key, glyph: b.glyph, lon: p.lon, speed: p.speed }); } catch (e) { /* out of range */ }
+  }
+  const rows = current.filter(p => on[p.key]).map(p => {
+    const b = byKey[p.key], showRx = p.speed < 0 && b.stations;
+    return `<li>${bodyGlyph(b)}<span class="nm">${b.name}</span><span class="pos">${posHTML(p.lon)}${showRx ? RX : ''}</span></li>`;
+  });
+  $('readout').innerHTML = rows.length ? rows.join('') : emptyRow('Every body is switched off.');
+}
+$('scrub').addEventListener('input', e => { scrubFrac = e.target.value / 2000; updateReadout(); requestDraw(); });
+
+function renderStations() {
+  const list = model.stations.filter(s => on[s.key]);
+  $('stations').innerHTML = list.length ? list.map(s => {
+    const b = byKey[s.key];
+    return `<li>${bodyGlyph(b)}<span class="nm">${b.name} stations ${s.type === 'R' ? 'retrograde' : 'direct'}</span>` +
+      `<span class="pos">${posHTML(s.lon)}</span><span class="wh">${fmtStation.format(new Date(jdToMs(s.jd)))}</span></li>`;
+  }).join('') : emptyRow('No stations for the bodies shown in this range.');
+}
+
+// ---- Bodies -------------------------------------------------------------
+function buildChips() {
+  const box = $('chips');
+  for (const b of BODIES) {
+    if (!(b.key in on)) on[b.key] = true;
+    const btn = document.createElement('button');
+    btn.type = 'button'; btn.className = 'chip'; btn.id = 'chip-' + b.key; btn.style.setProperty('--c', `var(--c-${b.key})`);
+    btn.setAttribute('aria-pressed', String(!!on[b.key]));
+    const g = document.createElement('span'); g.className = 'g'; g.textContent = b.glyph; g.setAttribute('aria-hidden', 'true');
+    btn.append(g, document.createTextNode(b.name));
+    btn.addEventListener('click', () => {
+      on[b.key] = !on[b.key]; btn.setAttribute('aria-pressed', String(on[b.key]));
+      persist(); if (model) { updateReadout(); renderStations(); requestDraw(); }
+    });
+    box.appendChild(btn);
+  }
+}
+
+function persist() { store.set({ rot, on, mode }); }
+
+// ---- Compute ------------------------------------------------------------
+const MAX_YEARS = 50;
+const fmtDay = new Intl.DateTimeFormat(undefined, { year: 'numeric', month: 'short', day: 'numeric' });
+// Compute and draw [ms0, ms1). scrubMs keeps the date marker where it was; null puts it on today when today is in range.
+function build(ms0, ms1, scrubMs, quick) {
+  const jd0 = msToJd(ms0), jd1 = msToJd(ms1);
+  const tr = {}, stations = [], missing = [];
+  for (const body of BODIES) {
+    if (body.key === 'chiron' && !chironOk) { missing.push(body.name); continue; }
+    try {
+      const t = tracks.track(body, jd0, jd1);
+      tr[body.key] = t;
+      if (body.stations) stations.push(...tracks.stationsIn(body, t));
+    } catch (err) { missing.push(body.name); }
+  }
+  stations.sort((x, y) => x.jd - y.jd);
+  model = { ms0, ms1, jd0, jd1, tracks: tr, stations };
+  for (const body of BODIES) $('chip-' + body.key).disabled = !tr[body.key];
+  let s = scrubMs;
+  if (s == null) { const now = Date.now(); s = now > ms0 && now < ms1 ? now : ms0; }
+  scrubFrac = Math.max(0, Math.min(1, (s - ms0) / (ms1 - ms0)));
+  $('scrub').value = Math.round(scrubFrac * 2000);
+  updateReadout(); if (!quick) renderStations(); draw();
+  const days = Math.round((ms1 - ms0) / DAY);
+  setMsg(`${days.toLocaleString()} days: ${fmtDay.format(new Date(ms0))} to ${fmtDay.format(new Date(ms1 - DAY / 2))}.` + (missing.length ? ` Not available for this range: ${missing.join(', ')}.` : ''));
+}
+function compute() {
+  const a = fromInput($('from').value), b = fromInput($('to').value);
+  if (!a || !b) return setMsg('Enter both dates.', true);
+  const ms0 = +a, endDay = new Date(b); endDay.setDate(endDay.getDate() + 1);
+  const ms1 = +endDay;
+  if (ms1 - ms0 < 2 * DAY) return setMsg('The end date has to be after the start date.', true);
+  if (ms1 - ms0 > MAX_YEARS * 365.25 * DAY) return setMsg(`Ranges up to ${MAX_YEARS} years are supported. Shorten the range and draw again.`, true);
+  if (a.getFullYear() < -2000 || b.getFullYear() > 2900) return setMsg('Dates between 2000 BCE and 2900 CE are supported.', true);
+  setMsg('Computing…');
+  setTimeout(() => {
+    try { build(ms0, ms1, null, false); }
+    catch (err) { setMsg('The calculation failed: ' + (err && err.message ? err.message : err), true); }
+  }, 30);
+}
+$('rangeForm').addEventListener('submit', e => { e.preventDefault(); if (tracks) compute(); });
+for (const btn of document.querySelectorAll('.spans .btn')) {
+  btn.addEventListener('click', () => {
+    const a = fromInput($('from').value) || today;
+    $('from').value = toInput(a); $('to').value = toInput(addSpan(a, btn.dataset.span));
+    if (tracks) compute();
+  });
+}
+
+// ---- Start --------------------------------------------------------------
+buildChips(); setMode(mode); updateTop();
+startTheme(() => { readColors(); requestDraw(); });   // the wheel repaints whenever the clock moves the palette
+resize();
+if (document.fonts && document.fonts.ready) {
+  for (const f of ['16px "Noto Sans Symbols"', '16px "Noto Sans Symbols 2"', '500 16px "EB Garamond"']) document.fonts.load(f, '♈☉ 2027').catch(() => {});
+  document.fonts.ready.then(requestDraw);
+  document.fonts.addEventListener('loadingdone', requestDraw);
+}
+try {
+  const tz = new Intl.DateTimeFormat(undefined, { timeZoneName: 'short' }).formatToParts(new Date()).find(p => p.type === 'timeZoneName');
+  if (tz) $('tz').textContent = ` (${tz.value})`;
+} catch (e) { /* no zone name; the sentence reads fine without it */ }
+
+const EPHE_JSON = false;   // true only where .se1 files cannot be served as they are
+async function ephemerisFile(base, name) {
+  const r = await fetch(new URL('ephe/' + (EPHE_JSON ? name.replace('.se1', '.json') : name), base));
+  if (!r.ok) throw new Error(name + ' ' + r.status);
+  if (!EPHE_JSON) return new Uint8Array(await r.arrayBuffer());
+  const bin = atob((await r.json()).b64), bytes = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+  return bytes;
+}
+async function start() {
+  const base = new URL('../', import.meta.url);
+  const names = ['sepl_18.se1', 'semo_18.se1', 'seas_18.se1'];
+  const [M, ...bufs] = await Promise.all([
+    createSwissEph({ locateFile: f => new URL('vendor/' + f, base).href }),
+    ...names.map(n => ephemerisFile(base, n)),
+  ]);
+  const sky = new Sky(M, Object.fromEntries(names.map((n, i) => [n, bufs[i]])));
+  $('swe-ver').textContent = sky.version();
+  tracks = new Tracks(M);
+  try { tracks.posAt(15, 2451545.0); chironOk = true; } catch (e) { chironOk = false; }
+  compute();
+}
+start().catch(err => {
+  console.error(err);
+  setMsg('The ephemeris did not load, so nothing can be drawn. Check your connection and reload the page.', true);
+  $('readout').innerHTML = emptyRow('Nothing to show until the ephemeris loads.');
+});
+</script>
+</body>
+</html>

@@ -338,11 +338,12 @@ function render(sky, now) {
 // The country is read from the device's time zone, then from its language setting.
 // Neither asks for permission or sends anything anywhere.
 const ALMANAC = 'B0HR788HTP';
-// Marketplaces where the listing is live. A country that is not here gets HOME.
-// To add one: US: 'amazon.com', GB: 'amazon.co.uk', DE: 'amazon.de', FR: 'amazon.fr', ES: 'amazon.es', IT: 'amazon.it',
-// NL: 'amazon.nl', PL: 'amazon.pl', SE: 'amazon.se', BE: 'amazon.com.be', IE: 'amazon.ie', AU: 'amazon.com.au', JP: 'amazon.co.jp'
-const MARKETS = { CA: 'amazon.ca' };
-const HOME = 'CA';
+// Marketplaces that carry the listing (the same ID on each). A country that is not here gets HOME.
+const MARKETS = {
+  CA: 'amazon.ca', US: 'amazon.com', GB: 'amazon.co.uk', IE: 'amazon.ie', DE: 'amazon.de', FR: 'amazon.fr', ES: 'amazon.es',
+  IT: 'amazon.it', NL: 'amazon.nl', BE: 'amazon.com.be', PL: 'amazon.pl', SE: 'amazon.se', AU: 'amazon.com.au', JP: 'amazon.co.jp',
+};
+const HOME = 'US';
 const CA_ZONES = 'Toronto Vancouver Edmonton Winnipeg Halifax St_Johns Regina Moncton Montreal Whitehorse Yellowknife Iqaluit Glace_Bay Goose_Bay Thunder_Bay Nipigon Rainy_River Atikokan Swift_Current Cambridge_Bay Rankin_Inlet Resolute Inuvik Dawson Dawson_Creek Fort_Nelson Creston Blanc-Sablon Pangnirtung Coral_Harbour'.split(' ');
 const US_ZONES = 'New_York Chicago Denver Los_Angeles Phoenix Anchorage Detroit Boise Juneau Sitka Nome Yakutat Metlakatla Adak Menominee'.split(' ');
 const OTHER_ZONES = {

@@ -1,0 +1,585 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Ephemeris</title>
+<meta name="description" content="A plain ephemeris table for any range of dates: the Sun, Moon, planets, Chiron and the Node, day by day, week by week or month by month. Computed live with the Swiss Ephemeris.">
+<style>
+/* Layout: the same left-aligned almanac column as the home page, with the table allowed to run wider than the column. */
+@font-face { font-family: "EB Garamond"; font-style: normal; font-weight: 400 800; font-display: swap; src: url("../fonts/eb-garamond-latin-wght-normal.woff2") format("woff2"); }
+@font-face { font-family: "EB Garamond"; font-style: italic; font-weight: 400 800; font-display: swap; src: url("../fonts/eb-garamond-latin-wght-italic.woff2") format("woff2"); }
+@font-face { font-family: "Noto Sans Symbols"; font-display: swap; src: url("../fonts/noto-sans-symbols-symbols-400-normal.woff2") format("woff2"); }
+@font-face { font-family: "Noto Sans Symbols 2"; font-display: swap; src: url("../fonts/noto-sans-symbols-2-symbols-400-normal.woff2") format("woff2"); }
+:root {
+  /* Night (navy and gold) is the resting palette; theme.js repaints these tokens by the visitor's clock. */
+  --bg1: #0a1030; --bg2: #161d45;
+  --ink: #ece5cf; --muted: #a2a7c4; --accent: #dcb866; --line: #2c3566; --panel: #121a40;
+  --stars: 1;
+  --warn: #ff9d8a;
+  --c-sun: #f2c14e; --c-moon: #aab1d2; --c-mercury: #5fd0b8; --c-venus: #f08cc4; --c-mars: #ff6b5e; --c-jupiter: #a98bff;
+  --c-saturn: #c9b288; --c-uranus: #5cc8f5; --c-neptune: #7f9bff; --c-pluto: #d0728f; --c-node: #9bd06a; --c-chiron: #f0a45c;
+  --serif: "EB Garamond", Garamond, "Iowan Old Style", "Palatino Linotype", Georgia, serif;
+  --glyph: "Noto Sans Symbols", "Noto Sans Symbols 2", "Apple Symbols", "Segoe UI Symbol", "DejaVu Sans", sans-serif;
+  color-scheme: dark;
+}
+:root[data-ground="light"] {
+  --warn: #a3261a;
+  --c-sun: #a87200; --c-moon: #6f7698; --c-mercury: #1a7a69; --c-venus: #b3357f; --c-mars: #bd2f26; --c-jupiter: #6243bd;
+  --c-saturn: #65563a; --c-uranus: #0f7aa8; --c-neptune: #2749bd; --c-pluto: #7a1f3d; --c-node: #44701f; --c-chiron: #a85a14;
+}
+* { box-sizing: border-box; }
+html { min-height: 100%; background: var(--bg2); }
+body {
+  min-height: 100vh; margin: 0;
+  background: linear-gradient(180deg, var(--bg1), var(--bg2)) fixed;
+  color: var(--ink);
+  font-family: var(--serif); font-size: 1.1875rem; line-height: 1.45;
+  font-variant-numeric: lining-nums tabular-nums;
+  -webkit-text-size-adjust: 100%;
+}
+#stars { position: fixed; inset: 0; width: 100%; height: 100%; pointer-events: none; opacity: var(--stars); z-index: 0; }
+.page {
+  position: relative; z-index: 1;
+  max-width: 46rem; margin: 0 auto;
+  padding-left: max(20px, env(safe-area-inset-left, 0px)); padding-right: max(20px, env(safe-area-inset-right, 0px));
+  padding-block: calc(2.5rem + env(safe-area-inset-top, 0px)) calc(3rem + env(safe-area-inset-bottom, 0px));
+  display: flex; flex-direction: column; gap: 2.75rem;
+}
+a { color: inherit; }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; border-radius: 2px; }
+.g { font-family: var(--glyph); font-style: normal; font-weight: 400; }
+h1, h2, p, ul, ol { margin: 0; }
+ul, ol { list-style: none; padding: 0; }
+[hidden] { display: none !important; }
+
+.mast { display: flex; flex-direction: column; gap: .5rem; }
+.mast .home { font-size: 1.6rem; font-style: italic; line-height: 1; text-decoration: none; align-self: flex-start; }
+.mast .home span { color: var(--accent); }
+.mast h1 { font-size: clamp(2.5rem, 10vw, 4rem); font-style: italic; font-weight: 400; line-height: 1.02; letter-spacing: -.015em; text-wrap: balance; }
+.mast .now { color: var(--muted); font-size: 1.05rem; max-width: 34rem; }
+
+h2, .lab { font-size: .85rem; font-weight: 500; letter-spacing: .16em; text-transform: uppercase; color: var(--accent); }
+section { display: flex; flex-direction: column; gap: .9rem; min-width: 0; }
+.note { color: var(--muted); font-size: 1rem; min-height: 1.45em; }
+.note.err { color: var(--warn); }
+
+/* Controls, in the same square, ruled manner as the cyclogram */
+.range, .opts { display: flex; flex-wrap: wrap; align-items: flex-end; gap: .75rem 1rem; }
+.field { display: flex; flex-direction: column; gap: .25rem; }
+.field label { font-size: .8rem; letter-spacing: .14em; text-transform: uppercase; color: var(--muted); }
+input[type="date"], select, .btn, .chip {
+  font: inherit; font-size: 1.05rem; line-height: 1.2; color: var(--ink);
+  background: var(--panel); border: 1px solid var(--line); border-radius: 0; min-height: 2.6rem; padding: .4rem .7rem;
+}
+input[type="date"] { font-variant-numeric: lining-nums tabular-nums; }
+select { cursor: pointer; }
+.btn, .chip { cursor: pointer; }
+.btn:hover, .chip:hover, select:hover { border-color: var(--accent); }
+.btn.primary { border-color: var(--accent); color: var(--accent); font-style: italic; padding-inline: 1.1rem; }
+.btn[disabled] { cursor: not-allowed; opacity: .5; }
+.spans, .chips, .acts { display: flex; flex-wrap: wrap; align-items: center; gap: .4rem; }
+.chip { display: inline-flex; align-items: center; gap: .4rem; font-size: 1rem; min-height: 2.25rem; padding: .25rem .65rem; }
+.chip .g { font-size: 1.05rem; line-height: 1; color: var(--c); width: 1.1em; text-align: center; }
+.chip[aria-pressed="false"] { background: none; border-style: dashed; color: var(--muted); }
+.chip[aria-pressed="false"] .g { color: var(--muted); }
+
+/* The table: wider than the text column where the window allows, scrolling inside its own box */
+.wide { margin-inline: min(0px, calc((100% - min(80rem, 100vw - 40px)) / 2)); }
+.tbox { max-height: 78vh; overflow: auto; border: 1px solid var(--line); background: var(--panel); overscroll-behavior: contain; }
+table.eph { border-collapse: separate; border-spacing: 0; width: 100%; font-size: 1rem; line-height: 1.25; white-space: nowrap; }
+.eph th, .eph td { padding: .3rem .55rem; border-bottom: 1px solid var(--line); text-align: right; }
+.eph thead th { position: sticky; top: 0; z-index: 2; background: var(--panel); border-bottom: 1px solid var(--accent); font-weight: 400; padding-block: .5rem .45rem; }
+.eph thead th .g { font-size: 1.25rem; line-height: 1; }
+.eph thead th.d, .eph thead th.sid { font-size: .78rem; letter-spacing: .14em; text-transform: uppercase; color: var(--muted); vertical-align: bottom; }
+.eph .d { position: sticky; left: 0; z-index: 1; background: var(--panel); text-align: left; border-right: 1px solid var(--line); }
+.eph thead th.d { z-index: 3; }
+.eph td.d .wd { color: var(--muted); display: inline-block; min-width: 2.4em; }
+.eph td.sid { color: var(--muted); }
+.eph tr.mo th { text-align: left; font-style: italic; font-weight: 400; font-size: 1.15rem; color: var(--accent); padding: .8rem .55rem .3rem; border-bottom: 1px solid var(--line); background: var(--panel); }
+.eph tr.mo th span { position: sticky; left: .55rem; }
+.eph tbody tr:not(.mo):hover td { background: color-mix(in srgb, var(--accent) 7%, var(--panel)); }
+.eph tr.today td { background: color-mix(in srgb, var(--accent) 13%, var(--panel)); }
+.eph tr.today td.d { box-shadow: inset 3px 0 0 var(--accent); }
+.eph td .g { color: var(--muted); margin: 0 .08em; }
+.eph td.in .g { color: var(--accent); font-weight: 700; }
+.eph td.retro { font-style: italic; }
+.eph sup.st { font-size: .72em; font-style: italic; font-weight: 600; color: var(--accent); margin-left: .12em; vertical-align: .45em; line-height: 0; }
+.eph td.na { color: var(--muted); }
+.legend { color: var(--muted); font-size: 1rem; display: flex; flex-wrap: wrap; gap: .3rem 1.5rem; }
+.legend .g { color: var(--accent); font-weight: 700; }
+.legend i { color: var(--ink); }
+.legend sup { color: var(--accent); font-style: italic; font-weight: 600; }
+
+footer { color: var(--muted); font-size: .95rem; display: flex; flex-direction: column; gap: .6rem; border-top: 1px solid var(--line); padding-top: 1.25rem; }
+footer p { max-width: 65ch; }
+
+@media (max-width: 640px) {
+  body { font-size: 1.125rem; }
+  .page { gap: 2.4rem; padding-block: calc(1.75rem + env(safe-area-inset-top, 0px)) calc(2.5rem + env(safe-area-inset-bottom, 0px)); }
+  table.eph { font-size: .95rem; }
+  .eph th, .eph td { padding-inline: .45rem; }
+}
+
+/* On paper: black on white, every row, the header repeated on each page */
+@media print {
+  :root { --ink: #000 !important; --muted: #555 !important; --accent: #000 !important; --line: #bbb !important; --panel: #fff !important; --stars: 0 !important; }
+  @page { size: landscape; margin: 10mm; }
+  html, body { background: #fff !important; }
+  #stars, .controls > :not(#msg), .acts, .chips, #h-table, .mast .now, .mast .home, footer p.how { display: none !important; }
+  .controls { gap: 0; }
+  #msg { color: #000; font-size: 9pt; }
+  .page { max-width: none; padding: 0; gap: .6rem; }
+  .mast h1 { font-size: 16pt; }
+  .wide { margin: 0; }
+  .tbox { max-height: none; overflow: visible; border: 0; }
+  table.eph { font-size: 8.5pt; }
+  .eph th, .eph td { padding: .08rem .3rem; }
+  .eph thead { display: table-header-group; }
+  .eph thead th, .eph .d { position: static; }
+  .eph thead th .g { color: #000 !important; font-size: 10pt; }
+  .eph tr.today td, .eph tr.today td.d { background: none; box-shadow: none; }
+  .eph tr { break-inside: avoid; }
+  .eph tr.mo th { font-size: 10pt; padding-top: .4rem; break-after: avoid; }
+  footer { font-size: 8pt; border: 0; padding: 0; }
+}
+</style>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='6' fill='%230a1030'/%3E%3Cpath d='M20 5a11 11 0 1 0 0 22 13 13 0 0 1 0-22z' fill='%23dcb866'/%3E%3C/svg%3E">
+</head>
+<body>
+<canvas id="stars" aria-hidden="true"></canvas>
+<div class="page">
+  <header class="mast">
+    <a class="home" href="../" aria-label="timepoetry home">time<span>poetry</span></a>
+    <h1>Ephemeris</h1>
+    <p class="now">Where the Sun, Moon, planets, Chiron and the Node stand, row by row, for whatever stretch of time you ask for.</p>
+  </header>
+
+  <section aria-labelledby="h-range" class="controls">
+    <h2 id="h-range">The range</h2>
+    <form class="range" id="rangeForm" novalidate>
+      <div class="field"><label for="from">From</label><input type="date" id="from" required></div>
+      <div class="field"><label for="to">To</label><input type="date" id="to" required></div>
+      <div class="field"><label for="step">Every</label>
+        <select id="step">
+          <option value="day">day</option>
+          <option value="week">week</option>
+          <option value="month">month</option>
+        </select>
+      </div>
+      <button class="btn primary" type="submit" id="go">Show</button>
+    </form>
+    <div class="spans" role="group" aria-label="Quick ranges">
+      <button class="btn" type="button" data-q="this-month">This month</button>
+      <button class="btn" type="button" data-q="next-month">Next month</button>
+      <button class="btn" type="button" data-q="this-year">This year</button>
+      <button class="btn" type="button" data-q="next-year">Next year</button>
+    </div>
+    <div class="opts">
+      <div class="field"><label for="at">Positions at</label>
+        <select id="at">
+          <option value="ut0">0h UT</option>
+          <option value="ut12">12h UT (noon)</option>
+          <option value="loc0">Midnight, your time</option>
+          <option value="loc12">Noon, your time</option>
+        </select>
+      </div>
+      <div class="field"><label for="node">Node</label>
+        <select id="node">
+          <option value="true">True node</option>
+          <option value="mean">Mean node</option>
+        </select>
+      </div>
+      <div class="field"><label for="prec">Precision</label>
+        <select id="prec">
+          <option value="min">Degree and minute</option>
+          <option value="sec">With seconds</option>
+        </select>
+      </div>
+    </div>
+    <p class="note" id="msg" role="status">Loading the ephemeris…</p>
+  </section>
+
+  <section aria-labelledby="h-table">
+    <h2 id="h-table">The table</h2>
+    <div class="chips" id="chips" role="group" aria-label="Columns shown"></div>
+    <div class="wide">
+      <div class="tbox" id="tbox" tabindex="0" aria-label="Ephemeris table; scrolls in both directions">
+        <table class="eph" id="eph"><tbody><tr><td class="na" style="text-align:left">Loading…</td></tr></tbody></table>
+      </div>
+    </div>
+    <p class="legend" id="legend">
+      <span><b>14<span class="g">♏︎</span>22</b> is 14 degrees 22 minutes of Scorpio</span>
+      <span><span class="g">♏︎</span> marks the row where it enters a new sign</span>
+      <span><i>Italic</i> is retrograde</span>
+      <span><sup>R</sup> and <sup>D</sup> mark the day it stations retrograde or direct</span>
+    </p>
+    <div class="acts">
+      <button class="btn" type="button" id="csv" disabled>Download CSV</button>
+      <button class="btn" type="button" id="print" disabled>Print</button>
+    </div>
+  </section>
+
+  <footer>
+    <p id="about">Tropical zodiac, geocentric, apparent positions. Degrees and minutes are cut off, not rounded, so a body never shows in a sign before it gets there. Sidereal time is for Greenwich at the moment of each row. A station's exact time is in the tooltip on its mark.</p>
+    <p class="how">The address bar keeps your range and settings, so you can bookmark or send a table as it is. Chiron is available from 1800 to 2399; outside those years the other bodies come from the Moshier theory built into the Swiss Ephemeris, which is a little less exact.</p>
+    <p>Computed in your browser with the <a href="https://www.astro.com/swisseph/">Swiss Ephemeris</a> <span id="swe-ver"></span>, © Astrodienst AG, used under the AGPL through the <a href="https://github.com/kuntayerkus/swisseph-wasm">@kuntay/swisseph</a> WebAssembly build. This page's own code is under the same licence, and its <a href="https://github.com/adriennnne/timepoetry.com">source is on GitHub</a>.</p>
+  </footer>
+</div>
+
+<script type="module">
+import createSwissEph from '../vendor/swisseph.mjs';
+import { Sky } from '../engine.js';
+import { startTheme } from '../theme.js';
+import { BODIES, SIGNS, SIGN_GLYPHS, Tracks, msToJd, jdToMs } from '../cyclogram/cyclogram.js';
+
+const $ = id => document.getElementById(id);
+const msgEl = $('msg');
+function setMsg(text, err) { msgEl.textContent = text; msgEl.classList.toggle('err', !!err); }
+
+const MAX_ROWS = 10000;
+const SIGN_ABBR = ['Ari', 'Tau', 'Gem', 'Can', 'Leo', 'Vir', 'Lib', 'Sco', 'Sag', 'Cap', 'Aqu', 'Pis'];
+const NODE_ID = { true: 11, mean: 10 };
+const AT = {
+  ut0:   { utc: true,  h: 0,  label: '0h UT' },
+  ut12:  { utc: true,  h: 12, label: '12h UT' },
+  loc0:  { utc: false, h: 0,  label: 'midnight your time' },
+  loc12: { utc: false, h: 12, label: 'noon your time' },
+};
+// Columns: sidereal time, then the bodies in the site's usual order.
+const COLS = [{ key: 'sid', name: 'Sidereal time', glyph: '', sid: true }, ...BODIES];
+
+// ---- Calendar dates (y, m 0–11, d), kept apart from instants so time zones never shift a row ----
+const pad = n => String(n).padStart(2, '0');
+const ymdStr = c => `${String(c.y).padStart(4, '0')}-${pad(c.m + 1)}-${pad(c.d)}`;
+function parseYmd(v) {
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(v || '');
+  if (!m) return null;
+  const c = { y: +m[1], m: +m[2] - 1, d: +m[3] };
+  const u = utcNoon(c);
+  return u.getUTCFullYear() === c.y && u.getUTCMonth() === c.m && u.getUTCDate() === c.d ? c : null;
+}
+function utcNoon(c) { const u = new Date(0); u.setUTCFullYear(c.y, c.m, c.d); u.setUTCHours(12, 0, 0, 0); return u; }
+const fromUtc = u => ({ y: u.getUTCFullYear(), m: u.getUTCMonth(), d: u.getUTCDate() });
+const daysIn = (y, m) => { const u = new Date(0); u.setUTCFullYear(y, m + 1, 0); return u.getUTCDate(); };
+const cmp = (a, b) => (a.y - b.y) || (a.m - b.m) || (a.d - b.d);
+function addDays(c, n) { const u = utcNoon(c); u.setUTCDate(u.getUTCDate() + n); return fromUtc(u); }
+function addMonths(c, n, day) {
+  const t = c.y * 12 + c.m + n, y = Math.floor(t / 12), m = t - y * 12;
+  return { y, m, d: Math.min(day ?? c.d, daysIn(y, m)) };
+}
+function instant(c, at) {
+  const a = AT[at];
+  if (a.utc) { const u = new Date(0); u.setUTCFullYear(c.y, c.m, c.d); u.setUTCHours(a.h, 0, 0, 0); return +u; }
+  const l = new Date(2000, 0, 1); l.setFullYear(c.y, c.m, c.d); l.setHours(a.h, 0, 0, 0); return +l;
+}
+// Every row date from a to b inclusive, plus the date one step past the end (for stations on the last row).
+function dates(a, b, step) {
+  const out = [];
+  let c = a, k = 0;
+  while (cmp(c, b) <= 0) {
+    out.push(c);
+    if (out.length > MAX_ROWS) return { list: out, tooMany: true };
+    k++;
+    c = step === 'day' ? addDays(a, k) : step === 'week' ? addDays(a, 7 * k) : addMonths(a, k, a.d);
+  }
+  return { list: out, after: c, tooMany: false };
+}
+function estimateRows(a, b, step) {
+  const days = Math.round((+utcNoon(b) - +utcNoon(a)) / 86400000);
+  return step === 'day' ? days + 1 : step === 'week' ? Math.floor(days / 7) + 1 : Math.floor(days / 30.4) + 1;
+}
+
+// ---- Settings: from the address bar first, then this browser's last choice ----
+const store = {
+  get() { try { return JSON.parse(localStorage.getItem('ephemeris') || '{}') || {}; } catch (e) { return {}; } },
+  set(o) { try { localStorage.setItem('ephemeris', JSON.stringify(o)); } catch (e) { /* storage unavailable */ } },
+};
+const saved = store.get();
+const on = Object.assign({}, saved.on || {});
+for (const c of COLS) if (!(c.key in on)) on[c.key] = true;
+
+const now = new Date();
+const today = { y: now.getFullYear(), m: now.getMonth(), d: now.getDate() };
+const q = new URLSearchParams(location.search);
+const pick = (name, allowed, fallback) => allowed.includes(q.get(name)) ? q.get(name) : allowed.includes(saved[name]) ? saved[name] : fallback;
+$('step').value = pick('step', ['day', 'week', 'month'], 'day');
+$('at').value = pick('at', Object.keys(AT), 'ut0');
+$('node').value = pick('node', ['true', 'mean'], 'true');
+$('prec').value = pick('prec', ['min', 'sec'], 'min');
+{
+  const a = parseYmd(q.get('from')), b = parseYmd(q.get('to'));
+  const first = { y: today.y, m: today.m, d: 1 };
+  $('from').value = ymdStr(a || first);
+  $('to').value = ymdStr(b || (a ? addDays(addMonths(a, 1), -1) : { y: today.y, m: today.m, d: daysIn(today.y, today.m) }));
+}
+function persist() {
+  store.set({ on, step: $('step').value, at: $('at').value, node: $('node').value, prec: $('prec').value });
+}
+function syncUrl() {
+  const p = new URLSearchParams({ from: $('from').value, to: $('to').value, step: $('step').value, at: $('at').value });
+  if ($('node').value !== 'true') p.set('node', $('node').value);
+  if ($('prec').value !== 'min') p.set('prec', $('prec').value);
+  try { history.replaceState(null, '', '?' + p.toString()); } catch (e) { /* file:// or sandboxed */ }
+}
+
+// ---- Formatting ----
+const FIG = ' ';   // figure space, so one-digit degrees line up under two-digit ones
+// Truncated, never rounded: 29°59.9′ Scorpio stays in Scorpio.
+function split(lon) {
+  lon = ((lon % 360) + 360) % 360;
+  const total = Math.floor(lon * 3600 + 1e-6) % 1296000;   // whole arcseconds round the zodiac
+  const sign = Math.floor(total / 108000), within = total % 108000;
+  return { sign, deg: Math.floor(within / 3600), min: Math.floor((within % 3600) / 60), sec: within % 60 };
+}
+function cellHTML(lon, sec) {
+  const p = split(lon);
+  const deg = p.deg < 10 ? FIG + p.deg : String(p.deg);
+  return `${deg}<span class="g" title="${SIGNS[p.sign]}">${SIGN_GLYPHS[p.sign]}</span>${pad(p.min)}${sec ? `′${pad(p.sec)}″` : ''}`;
+}
+function sidText(hours) {
+  const s = Math.floor(((hours % 24) + 24) % 24 * 3600 + 1e-6);
+  return `${Math.floor(s / 3600)}:${pad(Math.floor(s / 60) % 60)}:${pad(s % 60)}`;
+}
+const esc = s => String(s).replace(/[&<>"]/g, ch => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[ch]));
+
+// ---- Compute ----
+let M = null, tracks = null, model = null;
+
+function posOrNull(id, jd) { try { return tracks.posAt(id, jd); } catch (e) { return null; } }
+function stationTime(id, lo, hi, sLo) {
+  for (let k = 0; k < 50; k++) {
+    const mid = (lo + hi) / 2, p = tracks.posAt(id, mid);
+    if ((p.speed > 0) === (sLo > 0)) { lo = mid; sLo = p.speed; } else hi = mid;
+  }
+  return (lo + hi) / 2;
+}
+
+function build(a, b, step, at, node) {
+  const { list, after } = dates(a, b, step);
+  const bodies = BODIES.map(x => x.key === 'node' ? { ...x, id: NODE_ID[node] } : x);
+  const rows = list.map(c => {
+    const ms = instant(c, at), jd = msToJd(ms);
+    const cells = {};
+    for (const x of bodies) cells[x.key] = posOrNull(x.id, jd);
+    return { c, ms, jd, sid: M._swe_sidtime(jd), cells, marks: {} };
+  });
+  // A station belongs to the row whose step it falls inside: [this row, next row).
+  const afterJd = msToJd(instant(after, at));
+  for (const x of bodies) {
+    if (!x.stations) continue;
+    for (let i = 0; i < rows.length; i++) {
+      const p0 = rows[i].cells[x.key];
+      const j1 = i + 1 < rows.length ? rows[i + 1].jd : afterJd;
+      const p1 = i + 1 < rows.length ? rows[i + 1].cells[x.key] : posOrNull(x.id, j1);
+      if (!p0 || !p1 || p0.speed === 0 || (p0.speed > 0) === (p1.speed > 0)) continue;
+      const jd = stationTime(x.id, rows[i].jd, j1, p0.speed);
+      rows[i].marks[x.key] = { type: p0.speed > 0 ? 'R' : 'D', jd };
+    }
+  }
+  const missing = bodies.filter(x => rows.every(r => !r.cells[x.key])).map(x => x.name);
+  return { rows, step, at, node, missing, a, b };
+}
+
+// ---- Render ----
+const fmtWd = new Intl.DateTimeFormat(undefined, { weekday: 'short', timeZone: 'UTC' });
+const fmtMonth = new Intl.DateTimeFormat(undefined, { month: 'long', year: 'numeric', timeZone: 'UTC' });
+const fmtMonthDay = new Intl.DateTimeFormat(undefined, { month: 'short', day: 'numeric', timeZone: 'UTC' });
+const fmtDay = new Intl.DateTimeFormat(undefined, { year: 'numeric', month: 'short', day: 'numeric', timeZone: 'UTC' });
+const fmtExactUT = new Intl.DateTimeFormat(undefined, { year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit', hourCycle: 'h23', timeZone: 'UTC' });
+const fmtExactLocal = new Intl.DateTimeFormat(undefined, { year: 'numeric', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
+
+function render() {
+  if (!model) return;
+  const sec = $('prec').value === 'sec';
+  const cols = COLS.filter(c => on[c.key]);
+  const { rows, step, at } = model;
+  const utc = AT[at].utc;
+  const nodeName = model.node === 'mean' ? 'Mean Node' : 'True Node';
+  let h = '<thead><tr><th class="d" scope="col">Date</th>';
+  for (const c of cols) {
+    if (c.sid) h += '<th class="sid" scope="col" title="Sidereal time at Greenwich">Sid. time</th>';
+    else h += `<th scope="col" title="${c.key === 'node' ? nodeName : c.name}"><span class="g" style="color:var(--c-${c.key})" aria-label="${c.key === 'node' ? nodeName : c.name}">${c.glyph}</span></th>`;
+  }
+  h += '</tr></thead><tbody>';
+  const span = cols.length + 1;
+  let group = null;
+  const prevSign = {};
+  for (const r of rows) {
+    const g = step === 'month' ? String(r.c.y) : `${r.c.y}-${r.c.m}`;
+    if (g !== group) {
+      group = g;
+      const label = step === 'month' ? String(r.c.y) : fmtMonth.format(utcNoon(r.c));
+      h += `<tr class="mo"><th colspan="${span}" scope="rowgroup"><span>${esc(label)}</span></th></tr>`;
+    }
+    const u = utcNoon(r.c);
+    const isToday = cmp(r.c, today) === 0;
+    const dateCell = step === 'month' ? esc(fmtMonthDay.format(u)) : `<span class="wd">${esc(fmtWd.format(u))}</span> ${r.c.d}`;
+    h += `<tr${isToday ? ' class="today"' : ''}><td class="d">${dateCell}</td>`;
+    for (const c of cols) {
+      if (c.sid) { h += `<td class="sid">${sidText(r.sid)}</td>`; continue; }
+      const p = r.cells[c.key];
+      if (!p) { h += '<td class="na">—</td>'; prevSign[c.key] = null; continue; }
+      const s = split(p.lon).sign;
+      const cls = [];
+      if (prevSign[c.key] != null && prevSign[c.key] !== s) cls.push('in');
+      prevSign[c.key] = s;
+      if (c.stations && p.speed < 0) cls.push('retro');
+      let mark = '';
+      const m = r.marks[c.key];
+      if (m) {
+        const when = utc ? fmtExactUT.format(new Date(jdToMs(m.jd))) + ' UT' : fmtExactLocal.format(new Date(jdToMs(m.jd)));
+        mark = `<sup class="st" title="${c.name} stations ${m.type === 'R' ? 'retrograde' : 'direct'} ${esc(when)}">${m.type}</sup>`;
+      }
+      h += `<td${cls.length ? ` class="${cls.join(' ')}"` : ''}>${cellHTML(p.lon, sec)}${mark}</td>`;
+    }
+    h += '</tr>';
+  }
+  h += '</tbody>';
+  $('eph').innerHTML = h;
+}
+
+function summary() {
+  const { rows, step, at, missing } = model;
+  const n = rows.length;
+  const unit = { day: n === 1 ? 'day' : 'days', week: n === 1 ? 'week' : 'weeks', month: n === 1 ? 'month' : 'months' }[step];
+  const first = fmtDay.format(utcNoon(rows[0].c)), last = fmtDay.format(utcNoon(rows[n - 1].c));
+  let s = `${n.toLocaleString()} ${unit}, ${first}${n > 1 ? ` to ${last}` : ''}, at ${AT[at].label}.`;
+  if (missing.length) s += ` Not available for these dates: ${missing.join(', ')}.`;
+  return s;
+}
+
+function compute() {
+  if (!tracks) return;
+  const a = parseYmd($('from').value), b = parseYmd($('to').value);
+  if (!a || !b) return setMsg('Enter both dates.', true);
+  if (cmp(b, a) < 0) return setMsg('The end date has to be on or after the start date.', true);
+  if (a.y < 1000 || b.y > 2899) return setMsg('Dates from the year 1000 to 2899 are supported.', true);
+  const step = $('step').value;
+  const est = estimateRows(a, b, step);
+  if (est > MAX_ROWS) {
+    const better = step === 'day' ? ' Try every week or every month, or a shorter range.' : step === 'week' ? ' Try every month, or a shorter range.' : ' Try a shorter range.';
+    return setMsg(`That would be about ${est.toLocaleString()} rows; the table stops at ${MAX_ROWS.toLocaleString()}.` + better, true);
+  }
+  setMsg('Computing…');
+  persist(); syncUrl();
+  setTimeout(() => {
+    try {
+      model = build(a, b, step, $('at').value, $('node').value);
+      render();
+      setMsg(summary());
+      $('csv').disabled = false; $('print').disabled = false;
+      scrollToToday();
+    } catch (err) {
+      console.error(err);
+      setMsg('The calculation failed: ' + (err && err.message ? err.message : err), true);
+    }
+  }, 30);
+}
+
+// When today is in the table, start the box scrolled so today's row sits near the top.
+function scrollToToday() {
+  const box = $('tbox'), row = box.querySelector('tr.today');
+  box.scrollTop = 0;
+  if (!row) return;
+  const head = box.querySelector('thead').offsetHeight;
+  box.scrollTop = Math.max(0, row.offsetTop - head - row.offsetHeight * 2);
+}
+
+// ---- CSV ----
+function csv() {
+  if (!model) return;
+  const { rows, at } = model;
+  const bodies = BODIES.filter(b => on[b.key]);
+  const nodeName = model.node === 'mean' ? 'Mean Node' : 'True Node';
+  const head = ['Date', 'Time', ...(on.sid ? ['Sidereal time'] : [])];
+  for (const b of bodies) { const nm = b.key === 'node' ? nodeName : b.name; head.push(nm, nm + ' longitude', nm + ' speed'); }
+  const lines = [head];
+  const utc = AT[at].utc;
+  for (const r of rows) {
+    const d = new Date(r.ms);
+    const time = utc ? `${pad(d.getUTCHours())}:${pad(d.getUTCMinutes())} UT` : `${pad(d.getHours())}:${pad(d.getMinutes())} local`;
+    const line = [ymdStr(r.c), time];
+    if (on.sid) line.push(sidText(r.sid));
+    for (const b of bodies) {
+      const p = r.cells[b.key];
+      if (!p) { line.push('', '', ''); continue; }
+      const s = split(p.lon), m = r.marks[b.key];
+      let txt = `${s.deg}°${pad(s.min)}'${pad(s.sec)}" ${SIGN_ABBR[s.sign]}`;
+      if (b.stations && p.speed < 0) txt += ' R';
+      if (m) txt += m.type === 'R' ? ' (stations R)' : ' (stations D)';
+      line.push(txt, (((p.lon % 360) + 360) % 360).toFixed(6), p.speed.toFixed(6));
+    }
+    lines.push(line);
+  }
+  const text = lines.map(l => l.map(v => /[",\n]/.test(v) ? `"${String(v).replace(/"/g, '""')}"` : v).join(',')).join('\r\n');
+  const url = URL.createObjectURL(new Blob(['﻿' + text], { type: 'text/csv;charset=utf-8' }));
+  const link = document.createElement('a');
+  link.href = url; link.download = `timepoetry-ephemeris-${ymdStr(model.a)}-to-${ymdStr(model.b)}.csv`;
+  document.body.appendChild(link); link.click(); link.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 2000);
+}
+
+// ---- Controls ----
+function buildChips() {
+  const box = $('chips');
+  for (const c of COLS) {
+    const btn = document.createElement('button');
+    btn.type = 'button'; btn.className = 'chip'; btn.style.setProperty('--c', c.sid ? 'var(--muted)' : `var(--c-${c.key})`);
+    btn.setAttribute('aria-pressed', String(!!on[c.key]));
+    if (!c.sid) { const g = document.createElement('span'); g.className = 'g'; g.textContent = c.glyph; g.setAttribute('aria-hidden', 'true'); btn.append(g); }
+    btn.append(document.createTextNode(c.name));
+    btn.addEventListener('click', () => {
+      on[c.key] = !on[c.key]; btn.setAttribute('aria-pressed', String(on[c.key]));
+      persist(); if (model) { const top = $('tbox').scrollTop; render(); $('tbox').scrollTop = top; }
+    });
+    box.appendChild(btn);
+  }
+}
+
+$('rangeForm').addEventListener('submit', e => { e.preventDefault(); compute(); });
+for (const id of ['step', 'at', 'node']) $(id).addEventListener('change', compute);
+$('prec').addEventListener('change', () => { persist(); syncUrl(); if (model) { const top = $('tbox').scrollTop; render(); $('tbox').scrollTop = top; } });
+for (const btn of document.querySelectorAll('.spans .btn')) {
+  btn.addEventListener('click', () => {
+    let a, b;
+    const y = today.y, m = today.m;
+    if (btn.dataset.q === 'this-month') { a = { y, m, d: 1 }; b = { y, m, d: daysIn(y, m) }; }
+    else if (btn.dataset.q === 'next-month') { a = addMonths({ y, m, d: 1 }, 1); b = { ...a, d: daysIn(a.y, a.m) }; }
+    else { const yy = btn.dataset.q === 'this-year' ? y : y + 1; a = { y: yy, m: 0, d: 1 }; b = { y: yy, m: 11, d: 31 }; }
+    $('from').value = ymdStr(a); $('to').value = ymdStr(b);
+    compute();
+  });
+}
+$('csv').addEventListener('click', csv);
+$('print').addEventListener('click', () => window.print());
+
+// ---- Start ----
+buildChips();
+startTheme();
+async function ephemerisFile(base, name) {
+  const r = await fetch(new URL('ephe/' + name, base));
+  if (!r.ok) throw new Error(name + ' ' + r.status);
+  return new Uint8Array(await r.arrayBuffer());
+}
+async function start() {
+  const base = new URL('../', import.meta.url);
+  const names = ['sepl_18.se1', 'semo_18.se1', 'seas_18.se1'];
+  const [mod, ...bufs] = await Promise.all([
+    createSwissEph({ locateFile: f => new URL('vendor/' + f, base).href }),
+    ...names.map(n => ephemerisFile(base, n)),
+  ]);
+  const sky = new Sky(mod, Object.fromEntries(names.map((n, i) => [n, bufs[i]])));   // sets the ephemeris path
+  $('swe-ver').textContent = sky.version();
+  M = mod;
+  tracks = new Tracks(M);
+  compute();
+}
+start().catch(err => {
+  console.error(err);
+  setMsg('The ephemeris did not load, so there is nothing to show. Check your connection and reload the page.', true);
+  $('eph').innerHTML = '<tbody><tr><td class="na" style="text-align:left">Nothing to show until the ephemeris loads.</td></tr></tbody>';
+});
+</script>
+</body>
+</html>

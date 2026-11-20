@@ -1,0 +1,944 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Chart Wheel</title>
+<meta name="description" content="Cast natal and event charts, synastry biwheels, tri-wheels and quad-wheels, midpoint composites and Davison charts. Computed in your browser with the Swiss Ephemeris; nothing you enter leaves your device.">
+<style>
+@font-face { font-family: "EB Garamond"; font-style: normal; font-weight: 400 800; font-display: swap; src: url("../fonts/eb-garamond-latin-wght-normal.woff2") format("woff2"); }
+@font-face { font-family: "EB Garamond"; font-style: italic; font-weight: 400 800; font-display: swap; src: url("../fonts/eb-garamond-latin-wght-italic.woff2") format("woff2"); }
+@font-face { font-family: "Noto Sans Symbols"; font-display: swap; src: url("../fonts/noto-sans-symbols-symbols-400-normal.woff2") format("woff2"); }
+@font-face { font-family: "Noto Sans Symbols 2"; font-display: swap; src: url("../fonts/noto-sans-symbols-2-symbols-400-normal.woff2") format("woff2"); }
+:root {
+  --bg1: #0a1030; --bg2: #161d45;
+  --ink: #ece5cf; --muted: #a2a7c4; --accent: #dcb866; --line: #2c3566; --panel: #121a40;
+  --stars: 1;
+  --warn: #ff9d8a; --soft: #6fb7ff;
+  --c-sun: #f2c14e; --c-moon: #aab1d2; --c-mercury: #5fd0b8; --c-venus: #f08cc4; --c-mars: #ff6b5e; --c-jupiter: #a98bff;
+  --c-saturn: #c9b288; --c-uranus: #5cc8f5; --c-neptune: #7f9bff; --c-pluto: #d0728f; --c-node: #9bd06a; --c-chiron: #f0a45c;
+  --serif: "EB Garamond", Garamond, "Iowan Old Style", "Palatino Linotype", Georgia, serif;
+  --glyph: "Noto Sans Symbols", "Noto Sans Symbols 2", "Apple Symbols", "Segoe UI Symbol", "DejaVu Sans", sans-serif;
+  color-scheme: dark;
+}
+:root[data-ground="light"] {
+  --warn: #b0301f; --soft: #1f5fbf;
+  --c-sun: #a87200; --c-moon: #6f7698; --c-mercury: #1a7a69; --c-venus: #b3357f; --c-mars: #bd2f26; --c-jupiter: #6243bd;
+  --c-saturn: #65563a; --c-uranus: #0f7aa8; --c-neptune: #2749bd; --c-pluto: #7a1f3d; --c-node: #44701f; --c-chiron: #a85a14;
+}
+* { box-sizing: border-box; }
+html { min-height: 100%; background: var(--bg2); }
+body {
+  min-height: 100vh; margin: 0;
+  background: linear-gradient(180deg, var(--bg1), var(--bg2)) fixed;
+  color: var(--ink);
+  font-family: var(--serif); font-size: 1.1875rem; line-height: 1.45;
+  font-variant-numeric: lining-nums tabular-nums;
+  -webkit-text-size-adjust: 100%;
+}
+#stars { position: fixed; inset: 0; width: 100%; height: 100%; pointer-events: none; opacity: var(--stars); z-index: 0; }
+.page {
+  position: relative; z-index: 1;
+  max-width: 46rem; margin: 0 auto;
+  padding-left: max(20px, env(safe-area-inset-left, 0px)); padding-right: max(20px, env(safe-area-inset-right, 0px));
+  padding-block: calc(2.5rem + env(safe-area-inset-top, 0px)) calc(3rem + env(safe-area-inset-bottom, 0px));
+  display: flex; flex-direction: column; gap: 2.75rem;
+}
+a { color: inherit; }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; border-radius: 2px; }
+.g { font-family: var(--glyph); font-style: normal; font-weight: 400; }
+h1, h2, h3, p, ul, ol { margin: 0; }
+ul, ol { list-style: none; padding: 0; }
+[hidden] { display: none !important; }
+
+.mast { display: flex; flex-direction: column; gap: .5rem; }
+.mast .home { font-size: 1.6rem; font-style: italic; line-height: 1; text-decoration: none; align-self: flex-start; }
+.mast .home span { color: var(--accent); }
+.mast h1 { font-size: clamp(2.5rem, 10vw, 4rem); font-style: italic; font-weight: 400; line-height: 1.02; letter-spacing: -.015em; }
+.mast .now { color: var(--muted); font-size: 1.05rem; max-width: 36rem; }
+
+h2, .lab { font-size: .85rem; font-weight: 500; letter-spacing: .16em; text-transform: uppercase; color: var(--accent); }
+section { display: flex; flex-direction: column; gap: .9rem; min-width: 0; }
+.note { color: var(--muted); font-size: 1rem; }
+.note.err, .err { color: var(--warn); }
+
+/* Controls */
+.field { display: flex; flex-direction: column; gap: .25rem; min-width: 0; position: relative; }
+.field > label, .field > .lab2 { font-size: .8rem; letter-spacing: .14em; text-transform: uppercase; color: var(--muted); }
+input[type="date"], input[type="time"], input[type="text"], input[type="search"], select, .btn, .chip {
+  font: inherit; font-size: 1.05rem; line-height: 1.2; color: var(--ink);
+  background: var(--panel); border: 1px solid var(--line); border-radius: 0; min-height: 2.6rem; padding: .4rem .6rem; width: 100%; min-width: 0;
+}
+input::placeholder { color: var(--muted); opacity: .75; font-style: italic; }
+input[aria-invalid="true"] { border-color: var(--warn); }
+input:disabled { opacity: .45; }
+select { cursor: pointer; }
+.btn, .chip { cursor: pointer; width: auto; }
+.btn:hover, .chip:hover, select:hover { border-color: var(--accent); }
+.btn.primary { border-color: var(--accent); color: var(--accent); font-style: italic; }
+.btn.small { font-size: .95rem; min-height: 2.2rem; padding: .25rem .6rem; }
+.btn.text { background: none; border-color: transparent; color: var(--muted); text-decoration: underline; text-underline-offset: .2em; min-height: 0; padding: .1rem 0; font-size: 1rem; }
+.btn.text:hover { color: var(--accent); }
+.row { display: flex; flex-wrap: wrap; align-items: center; gap: .4rem; }
+.chip { display: inline-flex; align-items: center; gap: .4rem; font-size: 1rem; min-height: 2.25rem; padding: .25rem .65rem; }
+.chip[aria-pressed="false"] { background: none; border-style: dashed; color: var(--muted); }
+.chip[aria-pressed="true"] { border-color: var(--accent); color: var(--accent); }
+.chip[disabled] { opacity: .45; cursor: not-allowed; }
+.check { display: inline-flex; align-items: center; gap: .45rem; color: var(--muted); font-size: 1rem; cursor: pointer; white-space: nowrap; }
+.check input { width: 1.1rem; height: 1.1rem; accent-color: var(--accent); margin: 0; }
+
+/* One card per person or moment */
+.entries { display: flex; flex-direction: column; gap: 1rem; }
+.entry { border: 1px solid var(--line); background: color-mix(in srgb, var(--panel) 70%, transparent); padding: 1rem 1rem 1.1rem; display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: .7rem .8rem; }
+.entry .head { grid-column: 1 / -1; display: flex; align-items: center; gap: .7rem; }
+.entry .tag { font-style: italic; font-size: 1.6rem; line-height: 1; color: var(--accent); min-width: 1.1rem; }
+.entry .head input { font-size: 1.25rem; font-style: italic; }
+.entry .date { grid-column: span 2; } .entry .time { grid-column: span 2; } .entry .unk { grid-column: span 2; justify-content: flex-end; padding-bottom: .55rem; }
+.entry .place { grid-column: 1 / -1; }
+.entry .lat, .entry .lon { grid-column: span 1; } .entry .zone { grid-column: span 3; } .entry .off { grid-column: span 1; }
+.entry .acts { grid-column: 1 / -1; }
+.entry .resolved { grid-column: 1 / -1; color: var(--muted); font-size: 1rem; }
+.entry .resolved b { color: var(--ink); font-weight: 500; }
+.entry select.saved { width: auto; max-width: 14rem; font-size: .95rem; min-height: 2.2rem; padding: .25rem .5rem; }
+.entry .lat input, .entry .lon input, .entry .off input { font-variant-numeric: tabular-nums; }
+
+/* Place search */
+.suggest { position: absolute; top: 100%; left: 0; right: 0; z-index: 20; background: var(--panel); border: 1px solid var(--accent); border-top: 0; max-height: 19rem; overflow-y: auto; }
+.suggest li { padding: .45rem .7rem; cursor: pointer; border-bottom: 1px solid var(--line); display: flex; justify-content: space-between; gap: 1rem; }
+.suggest li:last-child { border-bottom: 0; }
+.suggest li small { color: var(--muted); font-size: .9rem; white-space: nowrap; }
+.suggest li[aria-selected="true"], .suggest li:hover { background: color-mix(in srgb, var(--accent) 14%, var(--panel)); }
+.suggest li.none { color: var(--muted); cursor: default; font-size: 1rem; }
+
+/* Wheel setup */
+.presets { display: flex; flex-wrap: wrap; gap: .4rem; }
+.rings { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: .7rem .8rem; }
+.opts { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .7rem .8rem; }
+
+/* The wheel, as wide as the window allows */
+.wide { margin-inline: min(0px, calc((100% - min(62rem, 100vw - 40px)) / 2)); }
+#wheel { display: block; width: 100%; height: auto; max-height: 96vh; }
+#wheel text { font-family: var(--glyph); }
+#wheel .t { font-family: var(--serif); }
+.legend { display: flex; flex-wrap: wrap; gap: .3rem 1.4rem; color: var(--muted); font-size: 1rem; justify-content: center; }
+.legend b { color: var(--ink); font-weight: 500; }
+.legend i.sw { display: inline-block; width: .8em; height: .8em; border: 1px solid var(--line); vertical-align: -.05em; margin-right: .35em; }
+.keys { display: flex; flex-wrap: wrap; gap: .3rem 1.4rem; color: var(--muted); font-size: .98rem; justify-content: center; }
+.keys .ln { display: inline-block; width: 1.6em; height: 0; border-top: 2px solid; vertical-align: .3em; margin-right: .35em; }
+
+/* Tables */
+.tables { display: flex; flex-direction: column; gap: 2.2rem; }
+.chartinfo h3 { font-size: 1.5rem; font-style: italic; font-weight: 400; line-height: 1.15; }
+.chartinfo .sub { color: var(--muted); font-size: 1rem; }
+.rows { border-top: 1px solid var(--line); }
+.rows li { border-bottom: 1px solid var(--line); padding: .45rem 0; display: grid; column-gap: .9rem; align-items: baseline; }
+.pos li { grid-template-columns: 1.7rem 7.2rem minmax(0, 1fr) 4.5rem 4.5rem; }
+.pos li.hd { color: var(--muted); font-size: .78rem; letter-spacing: .14em; text-transform: uppercase; }
+.pos .gl { font-family: var(--glyph); font-size: 1.2rem; text-align: center; }
+.pos .gl.t { font-family: var(--serif); font-size: .85rem; font-weight: 600; letter-spacing: .04em; }
+.pos .p b { font-weight: 500; }
+.pos .h { text-align: right; color: var(--muted); }
+.pos .h.own { color: var(--ink); }
+.rx { font-style: italic; color: var(--accent); margin-left: .35em; }
+.rx sub { font-size: .7em; }
+.cusps { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: .3rem .9rem; font-size: 1rem; border-top: 1px solid var(--line); padding-top: .6rem; }
+.cusps span { white-space: nowrap; } .cusps i { color: var(--muted); font-style: normal; display: inline-block; min-width: 1.6em; }
+.gridbox { overflow-x: auto; border: 1px solid var(--line); background: var(--panel); }
+table.asg { border-collapse: collapse; font-size: .95rem; line-height: 1.1; }
+.asg th, .asg td { border: 1px solid var(--line); width: 3.1rem; min-width: 3.1rem; height: 2.9rem; text-align: center; padding: .1rem; }
+.asg th { font-family: var(--glyph); font-weight: 400; font-size: 1.15rem; }
+.asg th.t { font-family: var(--serif); font-size: .8rem; font-weight: 600; }
+.asg th.corner { font-family: var(--serif); font-size: .72rem; color: var(--muted); line-height: 1.15; font-weight: 400; }
+.asg td.x { background: none; border-color: transparent; }
+.asg td .a { font-family: var(--glyph); font-size: 1.15rem; display: block; }
+.asg td small { color: var(--muted); font-size: .72rem; }
+.asg td.k-hard .a { color: var(--warn); } .asg td.k-soft .a { color: var(--soft); } .asg td.k-minor .a { color: var(--c-node); } .asg td.k-conj .a { color: var(--accent); }
+.asg td.tight { background: color-mix(in srgb, var(--accent) 10%, var(--panel)); }
+
+details.saved summary { cursor: pointer; color: var(--muted); }
+details.saved ul { margin-top: .5rem; }
+details.saved li { display: flex; justify-content: space-between; gap: 1rem; border-bottom: 1px solid var(--line); padding: .35rem 0; }
+
+footer { color: var(--muted); font-size: .95rem; display: flex; flex-direction: column; gap: .6rem; border-top: 1px solid var(--line); padding-top: 1.25rem; }
+footer p { max-width: 65ch; }
+
+@media (max-width: 640px) {
+  body { font-size: 1.125rem; }
+  .page { gap: 2.4rem; padding-block: calc(1.75rem + env(safe-area-inset-top, 0px)) calc(2.5rem + env(safe-area-inset-bottom, 0px)); }
+  .entry { grid-template-columns: repeat(2, minmax(0, 1fr)); padding: .8rem; }
+  .entry .date, .entry .time, .entry .lat, .entry .lon, .entry .off { grid-column: span 1; }
+  .entry .unk, .entry .zone { grid-column: 1 / -1; justify-content: flex-start; padding-bottom: 0; }
+  .rings, .opts { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .pos li { grid-template-columns: 1.6rem minmax(0, 1fr) 3.4rem 3.4rem; }
+  .pos .nm { display: none; }
+  .cusps { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .wide { margin-inline: -12px; }
+}
+@media print {
+  :root { --ink: #000 !important; --muted: #444 !important; --accent: #000 !important; --line: #bbb !important; --panel: #fff !important; --stars: 0 !important; }
+  html, body { background: #fff !important; }
+  #stars, .no-print, .mast .now, .mast .home, footer p.how { display: none !important; }
+  .page { max-width: none; padding: 0; gap: 1rem; }
+  .wide { margin: 0; }
+  #wheel { max-height: none; width: 17cm; margin: 0 auto; }
+  .tables { gap: 1rem; } .chartinfo { break-inside: avoid; }
+}
+</style>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='6' fill='%230a1030'/%3E%3Cpath d='M20 5a11 11 0 1 0 0 22 13 13 0 0 1 0-22z' fill='%23dcb866'/%3E%3C/svg%3E">
+</head>
+<body>
+<canvas id="stars" aria-hidden="true"></canvas>
+<div class="page">
+  <header class="mast">
+    <a class="home" href="../" aria-label="timepoetry home">time<span>poetry</span></a>
+    <h1>Chart Wheel</h1>
+    <p class="now">Natal and event charts, synastry, composites and Davison charts, up to four wheels deep. Everything is computed here in your browser; nothing you type is sent anywhere.</p>
+  </header>
+
+  <section aria-labelledby="h-who" class="no-print">
+    <h2 id="h-who">People and moments</h2>
+    <div class="entries" id="entries"></div>
+    <div class="row">
+      <button class="btn" type="button" id="add">Add another chart</button>
+      <span class="note" id="placesNote">Loading places…</span>
+    </div>
+  </section>
+
+  <section aria-labelledby="h-setup" class="no-print">
+    <h2 id="h-setup">The wheel</h2>
+    <div class="presets" role="group" aria-label="Kind of chart">
+      <button class="chip" type="button" data-preset="single">Natal or event</button>
+      <button class="chip" type="button" data-preset="syn">Synastry biwheel</button>
+      <button class="chip" type="button" data-preset="comp">Composite</button>
+      <button class="chip" type="button" data-preset="dav">Davison</button>
+      <button class="chip" type="button" data-preset="tri">Tri-wheel</button>
+      <button class="chip" type="button" data-preset="quad">Quad-wheel</button>
+    </div>
+    <div class="rings" id="rings"></div>
+    <div class="field"><span class="lab2">Composite and Davison of</span><div class="row" id="of"></div></div>
+    <div class="opts">
+      <div class="field"><label for="hsys">Houses</label><select id="hsys"></select></div>
+      <div class="field"><label for="asp">Aspect lines</label><select id="asp"></select></div>
+    </div>
+    <p class="note" id="msg" role="status">Loading the ephemeris…</p>
+  </section>
+
+  <section aria-labelledby="h-wheel">
+    <h2 id="h-wheel" class="no-print">The chart</h2>
+    <div class="legend" id="ringLegend"></div>
+    <div class="wide"><svg id="wheel" viewBox="0 0 1000 1000" role="img" aria-labelledby="wheelTitle"><title id="wheelTitle">Chart wheel</title></svg></div>
+    <div class="keys" id="keys"></div>
+    <div class="row no-print" style="justify-content:center">
+      <button class="btn small" type="button" id="png">Download image</button>
+      <button class="btn small" type="button" id="svg">Download SVG</button>
+      <button class="btn small" type="button" id="link">Copy link to this chart</button>
+      <button class="btn small" type="button" id="print">Print</button>
+    </div>
+    <p class="note no-print" id="linkNote" style="text-align:center"></p>
+  </section>
+
+  <section aria-labelledby="h-asg">
+    <h2 id="h-asg">Aspects</h2>
+    <p class="note" id="asgNote"></p>
+    <div class="gridbox"><table class="asg" id="asg"></table></div>
+  </section>
+
+  <section aria-labelledby="h-pos">
+    <h2 id="h-pos">Positions</h2>
+    <div class="tables" id="tables"></div>
+  </section>
+
+  <section class="no-print" aria-labelledby="h-saved">
+    <details class="saved"><summary id="h-saved">Charts saved in this browser</summary><ul id="savedList"></ul></details>
+  </section>
+
+  <footer>
+    <p>Tropical zodiac, geocentric, true node. Degrees and minutes are cut off, not rounded. Orbs: 8° with the Sun or Moon, 6° between planets, 5° to the angles, 3° for Chiron, the nodes and every quincunx.</p>
+    <p class="how">Local time becomes Universal Time through your browser's copy of the IANA time zone database, which carries each place's history of daylight saving and old local mean time. Check the line under each chart; if the zone history is wrong for a birth, type the offset yourself. With the time unknown, a chart is cast for noon with no houses or angles. A midpoint composite takes the nearer midpoint of each pair of planets; its houses are built from the composite Midheaven at the latitude midway between the places (the derived-Ascendant method). A Davison chart is a real chart for the moment halfway between the births, at the place halfway between them on the globe. With three or four people both use the average. Chiron is available from 1800 to 2399.</p>
+    <p>Computed in your browser with the <a href="https://www.astro.com/swisseph/">Swiss Ephemeris</a> <span id="swe-ver"></span>, © Astrodienst AG, used under the AGPL through the <a href="https://github.com/kuntayerkus/swisseph-wasm">@kuntay/swisseph</a> WebAssembly build. Places from <a href="https://www.geonames.org/">GeoNames</a> under CC BY 4.0. This page's own code is under the AGPL, and its <a href="https://github.com/adriennnne/timepoetry.com">source is on GitHub</a>.</p>
+  </footer>
+</div>
+
+<script type="module">
+import createSwissEph from '../vendor/swisseph.mjs';
+import { Sky } from '../engine.js';
+import { startTheme } from '../theme.js';
+import {
+  SIGNS, SIGN_GLYPHS, POINTS, POINT, HOUSE_SYSTEMS, ASPECTS, Charts, houseOf, aspectsBetween, split,
+  norm360, msToJd, jdToMs, localToUt, zoneOffsetMs, zoneAbbr, parseOffset, parseCoord, coordText, validZone,
+} from './chart.js';
+
+const $ = id => document.getElementById(id);
+const esc = s => String(s ?? '').replace(/[&<>"']/g, ch => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[ch]));
+const pad = n => String(n).padStart(2, '0');
+const IDS = ['A', 'B', 'C', 'D'];
+const RAD = Math.PI / 180;
+function setMsg(t, err) { $('msg').textContent = t; $('msg').classList.toggle('err', !!err); }
+
+// ---- State -------------------------------------------------------------------------------------
+const visitorZone = (() => { try { return Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC'; } catch (e) { return 'UTC'; } })();
+const blank = id => ({ id, name: '', date: '', time: '', unknown: false, place: '', lat: null, lon: null, zone: '', offset: '' });
+function nowFields(zone) {
+  const ms = Date.now(), w = new Date(ms + (validZone(zone) ? zoneOffsetMs(ms, zone) : -new Date().getTimezoneOffset() * 60000));
+  return { date: `${String(w.getUTCFullYear()).padStart(4, '0')}-${pad(w.getUTCMonth() + 1)}-${pad(w.getUTCDate())}`, time: `${pad(w.getUTCHours())}:${pad(w.getUTCMinutes())}` };
+}
+function defaults() {
+  const a = { ...blank('A'), name: 'This moment', zone: visitorZone, ...nowFields(visitorZone), fresh: true };
+  return { entries: [a, blank('B')], rings: ['A'], of: ['A', 'B'], hsys: 'P', asp: 'auto' };
+}
+const b64 = {
+  enc(o) { const bytes = new TextEncoder().encode(JSON.stringify(o)); let s = ''; for (const b of bytes) s += String.fromCharCode(b); return btoa(s).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, ''); },
+  dec(s) { const bin = atob(s.replace(/-/g, '+').replace(/_/g, '/')); return JSON.parse(new TextDecoder().decode(Uint8Array.from(bin, c => c.charCodeAt(0)))); },
+};
+function sanitize(s) {
+  const d = defaults();
+  if (!s || !Array.isArray(s.entries)) return d;
+  const entries = s.entries.slice(0, 4).map((e, i) => {
+    const b = blank(IDS[i]);
+    for (const k of ['name', 'date', 'time', 'place', 'zone', 'offset']) if (typeof e[k] === 'string') b[k] = e[k].slice(0, 120);
+    b.unknown = !!e.unknown;
+    if (typeof e.lat === 'number' && Math.abs(e.lat) <= 90) b.lat = e.lat;
+    if (typeof e.lon === 'number' && Math.abs(e.lon) <= 180) b.lon = e.lon;
+    return b;
+  });
+  while (entries.length < 2) entries.push(blank(IDS[entries.length]));
+  const keys = [...entries.map(e => e.id), 'comp', 'dav'];
+  const rings = (Array.isArray(s.rings) ? s.rings : []).filter(k => keys.includes(k)).slice(0, 4);
+  return {
+    entries, rings: rings.length ? rings : ['A'],
+    of: (Array.isArray(s.of) ? s.of : ['A', 'B']).filter(k => entries.some(e => e.id === k)),
+    hsys: HOUSE_SYSTEMS.some(h => h[0] === s.hsys) ? s.hsys : 'P',
+    asp: typeof s.asp === 'string' ? s.asp : 'auto',
+  };
+}
+const store = {
+  get(k, f) { try { const v = localStorage.getItem(k); return v ? JSON.parse(v) : f; } catch (e) { return f; } },
+  set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) { /* storage unavailable */ } },
+};
+let state;
+{
+  const q = new URLSearchParams(location.search).get('c');
+  let s = null;
+  if (q) { try { s = b64.dec(q); } catch (e) { s = null; } }
+  state = s ? sanitize(s) : store.get('tp-chart-state', null) ? sanitize(store.get('tp-chart-state')) : defaults();
+}
+const shareable = () => ({ entries: state.entries.map(({ fresh, ...e }) => e), rings: state.rings, of: state.of, hsys: state.hsys, asp: state.asp });
+function persist() {
+  const s = shareable();
+  store.set('tp-chart-state', s);
+  try { history.replaceState(null, '', '?c=' + b64.enc(s)); } catch (e) { /* sandboxed */ }
+}
+
+// ---- Places ------------------------------------------------------------------------------------
+const regionNames = (() => { try { return new Intl.DisplayNames(['en'], { type: 'region' }); } catch (e) { return { of: c => c }; } })();
+const fold = s => s.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().replace(/[’']/g, '').trim();
+const shards = [];
+async function loadShard(file) {
+  const r = await fetch(file);
+  if (!r.ok) throw new Error(file + ' ' + r.status);
+  const d = await r.json();
+  const regions = d.regions.map(([cc, nm]) => {
+    const country = cc ? (regionNames.of(cc) || cc) : '';
+    return { cc, name: nm, country, key: fold(nm + ' ' + country + ' ' + cc) };
+  });
+  shards.push({ ...d, regions, folded: d.places.map(p => fold(p[0])) });
+}
+function placeLabel(sh, p) {
+  const r = sh.regions[p[1]];
+  return [p[0], r.name && r.name !== p[0] ? r.name : '', r.country].filter(Boolean).join(', ');
+}
+function searchPlaces(q, limit = 8) {
+  const parts = fold(q).split(',').map(s => s.trim()).filter(Boolean);
+  if (!parts.length) return [];
+  const [city, ...rest] = parts;
+  const found = [];
+  for (const sh of shards) {
+    const F = sh.folded;
+    for (let i = 0; i < F.length && found.length < 60; i++) {
+      if (!F[i].startsWith(city)) continue;
+      const p = sh.places[i];
+      if (rest.length && !rest.every(w => sh.regions[p[1]].key.includes(w))) continue;
+      found.push({ sh, p, exact: F[i] === city });
+    }
+  }
+  found.sort((a, b) => (b.exact - a.exact) || (b.p[5] - a.p[5]));
+  return found.slice(0, limit).map(({ sh, p }) => ({ label: placeLabel(sh, p), lat: p[2] / 1e4, lon: p[3] / 1e4, zone: sh.tz[p[4]], pop: p[5] }));
+}
+function biggestInZone(zone) {
+  for (const sh of shards) {
+    const zi = sh.tz.indexOf(zone);
+    if (zi < 0) continue;
+    const p = sh.places.find(x => x[4] === zi);   // places are sorted by population
+    if (p) return { label: placeLabel(sh, p), lat: p[2] / 1e4, lon: p[3] / 1e4, zone };
+  }
+  return null;
+}
+
+// ---- Entry cards -------------------------------------------------------------------------------
+const zoneList = (() => { try { return Intl.supportedValuesOf('timeZone'); } catch (e) { return []; } })();
+const savedCharts = () => store.get('tp-charts-saved', {});
+function entryHTML(e, i) {
+  const id = e.id;
+  const saved = Object.keys(savedCharts()).sort((a, b) => a.localeCompare(b));
+  return `<div class="entry" data-id="${id}">
+    <div class="head"><span class="tag" aria-hidden="true">${id}</span>
+      <input type="text" data-f="name" value="${esc(e.name)}" placeholder="Name of the person or moment" aria-label="Name for chart ${id}" autocomplete="off"></div>
+    <div class="field date"><label for="${id}-date">Date</label><input type="date" id="${id}-date" data-f="date" value="${esc(e.date)}" min="1000-01-01" max="2899-12-31"></div>
+    <div class="field time"><label for="${id}-time">Local time</label><input type="time" id="${id}-time" data-f="time" value="${esc(e.time)}" ${e.unknown ? 'disabled' : ''}></div>
+    <label class="check unk"><input type="checkbox" data-f="unknown" ${e.unknown ? 'checked' : ''}> Time unknown</label>
+    <div class="field place"><label for="${id}-place">Place</label>
+      <input type="search" id="${id}-place" data-f="place" value="${esc(e.place)}" placeholder="Start typing a town or city; add “, Ontario” or “, UK” to narrow it" autocomplete="off" role="combobox" aria-expanded="false" aria-controls="${id}-sug" aria-autocomplete="list">
+      <ul class="suggest" id="${id}-sug" role="listbox" hidden></ul></div>
+    <div class="field lat"><label for="${id}-lat">Latitude</label><input type="text" id="${id}-lat" data-f="lat" value="${e.lat == null ? '' : +e.lat.toFixed(4)}" placeholder="43.65 or 43N39" inputmode="text" autocomplete="off"></div>
+    <div class="field lon"><label for="${id}-lon">Longitude</label><input type="text" id="${id}-lon" data-f="lon" value="${e.lon == null ? '' : +e.lon.toFixed(4)}" placeholder="-79.38 or 79W23" inputmode="text" autocomplete="off"></div>
+    <div class="field zone"><label for="${id}-zone">Time zone</label><input type="text" id="${id}-zone" data-f="zone" value="${esc(e.zone)}" list="zones" placeholder="America/Toronto" autocomplete="off" spellcheck="false"></div>
+    <div class="field off"><label for="${id}-off">Offset</label><input type="text" id="${id}-off" data-f="offset" value="${esc(e.offset)}" placeholder="auto" autocomplete="off" title="Leave empty to use the zone's own history, or type an offset such as -5 or +5:30"></div>
+    <div class="row acts">
+      <button class="btn small" type="button" data-act="now">Now</button>
+      <button class="btn small" type="button" data-act="save">Save</button>
+      <select class="saved" data-act="load" aria-label="Load a saved chart into ${id}"><option value="">Saved…</option>${saved.map(n => `<option>${esc(n)}</option>`).join('')}</select>
+      ${i >= 2 && i === state.entries.length - 1 ? '<button class="btn small" type="button" data-act="remove">Remove</button>' : ''}
+    </div>
+    <p class="resolved" id="${id}-res" aria-live="polite"></p>
+  </div>`;
+}
+function renderEntries() {
+  $('entries').innerHTML = state.entries.map(entryHTML).join('') + `<datalist id="zones">${zoneList.map(z => `<option value="${z}">`).join('')}</datalist>`;
+  $('add').hidden = state.entries.length >= 4;
+}
+const entryOf = el => state.entries.find(e => e.id === el.closest('.entry').dataset.id);
+
+$('entries').addEventListener('input', ev => {
+  const t = ev.target, f = t.dataset.f;
+  if (!f) return;
+  const e = entryOf(t);
+  delete e.fresh;
+  if (f === 'lat' || f === 'lon') {
+    const v = parseCoord(t.value, f === 'lat');
+    e[f] = v;
+    t.setAttribute('aria-invalid', String(t.value.trim() !== '' && v == null));
+  } else if (f === 'unknown') {
+    e.unknown = t.checked;
+    t.closest('.entry').querySelector('[data-f="time"]').disabled = t.checked;
+  } else if (f === 'place') {
+    e.place = t.value; suggest(t);
+    return;   // the chart moves only when a place is chosen or coordinates are typed
+  } else if (f === 'offset') {
+    e.offset = t.value;
+    t.setAttribute('aria-invalid', String(t.value.trim() !== '' && parseOffset(t.value) == null));
+  } else e[f] = t.value;
+  if (f === 'name') { renderRingControls(); }
+  schedule();
+});
+$('entries').addEventListener('change', ev => {
+  const t = ev.target;
+  if (t.dataset.act === 'load') {
+    const s = savedCharts()[t.value];
+    if (!s) return;
+    const e = entryOf(t), id = e.id;
+    Object.assign(e, blank(id), s, { id }); delete e.fresh;
+    renderEntries(); renderRingControls(); schedule();
+  }
+});
+$('entries').addEventListener('click', ev => {
+  const t = ev.target.closest('[data-act]');
+  if (!t || t.tagName === 'SELECT') return;
+  const e = entryOf(t);
+  if (t.dataset.act === 'now') {
+    Object.assign(e, nowFields(e.zone || visitorZone), { unknown: false });
+    if (!e.zone && !e.offset) e.zone = visitorZone;
+    renderEntries(); schedule();
+  } else if (t.dataset.act === 'save') {
+    const name = (e.name || '').trim() || `Chart ${e.id} ${e.date}`;
+    const all = savedCharts();
+    const { id, fresh, ...data } = e;
+    all[name] = { ...data, name };
+    store.set('tp-charts-saved', all);
+    renderEntries(); renderSaved();
+    $(`${e.id}-res`).insertAdjacentHTML('afterbegin', `<b>Saved as “${esc(name)}” in this browser.</b> `);
+  } else if (t.dataset.act === 'remove') {
+    state.entries.pop();
+    state.rings = state.rings.filter(k => k === 'comp' || k === 'dav' || state.entries.some(x => x.id === k));
+    if (!state.rings.length) state.rings = ['A'];
+    state.of = state.of.filter(k => state.entries.some(x => x.id === k));
+    renderEntries(); renderRingControls(); schedule();
+  }
+});
+$('add').addEventListener('click', () => {
+  if (state.entries.length >= 4) return;
+  state.entries.push(blank(IDS[state.entries.length]));
+  renderEntries(); renderRingControls();
+  $(`${state.entries[state.entries.length - 1].id}-date`).focus();
+});
+
+// Place suggestions: arrow keys move, Enter picks, Escape closes.
+function suggest(input) {
+  const list = input.parentElement.querySelector('.suggest');
+  const q = input.value.trim();
+  if (q.length < 2) { closeSuggest(input); return; }
+  const res = shards.length ? searchPlaces(q) : [];
+  list.innerHTML = res.length ? res.map((r, i) => `<li role="option" id="${input.id}-o${i}" data-i="${i}" aria-selected="${i === 0}">${esc(r.label)}<small>${r.lat.toFixed(2)}, ${r.lon.toFixed(2)}</small></li>`).join('')
+    : `<li class="none">${shards.length ? 'No match in the list. Type the latitude and longitude and the time zone yourself.' : 'The list of places is still loading…'}</li>`;
+  list._res = res; list._i = 0;
+  list.hidden = false; input.setAttribute('aria-expanded', 'true');
+}
+function closeSuggest(input) { const l = input.parentElement.querySelector('.suggest'); l.hidden = true; input.setAttribute('aria-expanded', 'false'); }
+function choosePlace(input, r) {
+  const e = entryOf(input);
+  Object.assign(e, { place: r.label, lat: r.lat, lon: r.lon, zone: r.zone }); delete e.fresh;
+  const card = input.closest('.entry');
+  input.value = r.label;
+  card.querySelector('[data-f="lat"]').value = +r.lat.toFixed(4);
+  card.querySelector('[data-f="lon"]').value = +r.lon.toFixed(4);
+  card.querySelector('[data-f="zone"]').value = r.zone;
+  for (const f of ['lat', 'lon']) card.querySelector(`[data-f="${f}"]`).removeAttribute('aria-invalid');
+  closeSuggest(input); schedule();
+}
+$('entries').addEventListener('keydown', ev => {
+  const t = ev.target;
+  if (t.dataset.f !== 'place') return;
+  const list = t.parentElement.querySelector('.suggest');
+  if (list.hidden || !list._res || !list._res.length) return;
+  if (ev.key === 'ArrowDown' || ev.key === 'ArrowUp') {
+    ev.preventDefault();
+    list._i = (list._i + (ev.key === 'ArrowDown' ? 1 : -1) + list._res.length) % list._res.length;
+    for (const li of list.children) li.setAttribute('aria-selected', String(+li.dataset.i === list._i));
+    t.setAttribute('aria-activedescendant', `${t.id}-o${list._i}`);
+  } else if (ev.key === 'Enter') { ev.preventDefault(); choosePlace(t, list._res[list._i]); }
+  else if (ev.key === 'Escape') closeSuggest(t);
+});
+$('entries').addEventListener('mousedown', ev => {
+  const li = ev.target.closest('.suggest li[data-i]');
+  if (!li) return;
+  ev.preventDefault();
+  const list = li.parentElement;
+  choosePlace(list.parentElement.querySelector('[data-f="place"]'), list._res[+li.dataset.i]);
+});
+$('entries').addEventListener('focusout', ev => { if (ev.target.dataset && ev.target.dataset.f === 'place') setTimeout(() => closeSuggest(ev.target), 120); });
+
+// ---- Ring controls -----------------------------------------------------------------------------
+const entryLabel = e => (e.name || '').trim() || `Chart ${e.id}`;
+const ofNames = () => state.of.map(k => entryLabel(state.entries.find(e => e.id === k))).join(' & ');
+function chartLabel(key) {
+  if (key === 'comp') return `Composite of ${ofNames()}`;
+  if (key === 'dav') return `Davison of ${ofNames()}`;
+  const e = state.entries.find(x => x.id === key);
+  return e ? entryLabel(e) : key;
+}
+const RING_NAMES = ['Inner ring', 'Second ring', 'Third ring', 'Fourth ring'];
+function renderRingControls() {
+  const keys = [...state.entries.map(e => e.id), 'comp', 'dav'];
+  const opt = (k, sel) => `<option value="${k}" ${k === sel ? 'selected' : ''}>${k.length === 1 ? k + ' · ' : ''}${esc(chartLabel(k))}</option>`;
+  $('rings').innerHTML = RING_NAMES.map((nm, i) => `<div class="field"><label for="ring${i}">${nm}</label><select id="ring${i}" data-ring="${i}">
+    ${i ? `<option value="">None</option>` : ''}${keys.map(k => opt(k, state.rings[i])).join('')}</select></div>`).join('');
+  $('of').innerHTML = state.entries.map(e => `<button class="chip" type="button" data-of="${e.id}" aria-pressed="${state.of.includes(e.id)}">${e.id} · ${esc(entryLabel(e))}</button>`).join('');
+  $('hsys').innerHTML = HOUSE_SYSTEMS.map(([c, n]) => `<option value="${c}" ${c === state.hsys ? 'selected' : ''}>${n}</option>`).join('');
+  for (const b of document.querySelectorAll('[data-preset]')) b.setAttribute('aria-pressed', String(presetOf() === b.dataset.preset));
+}
+function presetOf() {
+  const r = state.rings.join(',');
+  return { A: 'single', 'A,B': 'syn', comp: 'comp', dav: 'dav', 'A,B,C': 'tri', 'A,B,C,D': 'quad' }[r] || '';
+}
+$('rings').addEventListener('change', ev => {
+  const rings = [...document.querySelectorAll('[data-ring]')].map(s => s.value).filter(Boolean);
+  state.rings = rings.length ? rings : ['A'];
+  renderRingControls(); schedule();
+});
+$('of').addEventListener('click', ev => {
+  const b = ev.target.closest('[data-of]');
+  if (!b) return;
+  const k = b.dataset.of;
+  state.of = state.of.includes(k) ? state.of.filter(x => x !== k) : IDS.filter(x => x === k || state.of.includes(x));
+  renderRingControls(); schedule();
+});
+$('hsys').addEventListener('change', () => { state.hsys = $('hsys').value; schedule(); });
+$('asp').addEventListener('change', () => { state.asp = $('asp').value; schedule(); });
+for (const b of document.querySelectorAll('[data-preset]')) b.addEventListener('click', () => {
+  const p = b.dataset.preset;
+  const need = { single: 1, syn: 2, comp: 2, dav: 2, tri: 3, quad: 4 }[p];
+  while (state.entries.length < need) state.entries.push(blank(IDS[state.entries.length]));
+  state.rings = { single: ['A'], syn: ['A', 'B'], comp: ['comp'], dav: ['dav'], tri: ['A', 'B', 'C'], quad: ['A', 'B', 'C', 'D'] }[p];
+  if ((p === 'comp' || p === 'dav') && state.of.length < 2) state.of = ['A', 'B'];
+  state.asp = 'auto';
+  renderEntries(); renderRingControls(); schedule();
+});
+
+// ---- Casting -----------------------------------------------------------------------------------
+let engine = null;
+let charts = {};          // key -> chart
+let info = {};            // entry id -> { html, ok }
+const fmtLocal = new Intl.DateTimeFormat(undefined, { weekday: 'short', year: 'numeric', month: 'short', day: 'numeric', timeZone: 'UTC' });
+function offText(sec) {
+  const a = Math.abs(sec), h = Math.floor(a / 3600), m = Math.floor(a / 60) % 60, s = a % 60;
+  return `UTC${sec < 0 ? '−' : '+'}${h}:${pad(m)}${s ? ':' + pad(s) + ' (local mean time)' : ''}`;
+}
+function utText(ms) {
+  const d = new Date(ms);
+  return `${pad(d.getUTCHours())}:${pad(d.getUTCMinutes())}${d.getUTCSeconds() ? ':' + pad(d.getUTCSeconds()) : ''} UT on ${fmtLocal.format(d)}`;
+}
+function resolve(e) {
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(e.date || '');
+  if (!m) return { err: 'Add a date.' };
+  const tm = /^(\d{2}):(\d{2})/.exec(e.time || '');
+  if (!e.unknown && !tm) return { err: 'Add the local time, or tick “Time unknown”.' };
+  const f = { y: +m[1], m: +m[2] - 1, d: +m[3], h: e.unknown ? 12 : +tm[1], mi: e.unknown ? 0 : +tm[2] };
+  const offTyped = (e.offset || '').trim();
+  const off = offTyped ? parseOffset(offTyped) : null;
+  if (offTyped && off == null) return { err: 'The offset should look like -5, +5:30 or UTC-3.' };
+  const zone = (e.zone || '').trim();
+  if (off == null && !zone) return { err: 'Add a time zone (choosing a place fills it in) or an offset.' };
+  if (off == null && !validZone(zone)) return { err: `“${zone}” isn’t a time zone this browser knows. Pick one from the list, or type an offset.` };
+  const r = localToUt(f, zone, off);
+  const hasPlace = e.lat != null && e.lon != null;
+  const chart = engine.cast({ jd: msToJd(r.ms), lat: hasPlace ? e.lat : 0, lon: hasPlace ? e.lon : 0, timeKnown: !e.unknown && hasPlace, hsys: state.hsys });
+  const abbr = off == null ? zoneAbbr(r.ms, zone) : '';
+  let html = `<b>${esc(fmtLocal.format(new Date(utcDay(f))))}${e.unknown ? '' : `, ${pad(f.h)}:${pad(f.mi)}`}</b> ` +
+    `${e.unknown ? '' : `${abbr ? abbr + ', ' : ''}${offText(r.offsetSec)} = ${utText(r.ms)}`}`;
+  if (hasPlace) html += ` · ${coordText(e.lat, true)} ${coordText(e.lon, false)}`;
+  const notes = [];
+  if (e.unknown) notes.push('Time unknown: cast for noon, without houses or angles; the Moon may be up to about 7° either way.');
+  else if (!hasPlace) notes.push('Add a place, or the latitude and longitude, for houses and angles.');
+  if (r.note === 'skipped') notes.push('That clock time was skipped when the clocks went forward; check the time or type the offset.');
+  if (r.note === 'twice') notes.push('That clock time happened twice when the clocks went back; this uses the first one. Type the offset to use the second.');
+  if (chart.fallback) notes.push(`This house system can’t be drawn this close to the pole, so these are ${chart.fallback} houses.`);
+  if (chart.missing.length) notes.push(`Not available for this date: ${chart.missing.join(', ')}.`);
+  if (notes.length) html += `<br><span class="err">${notes.map(esc).join(' ')}</span>`;
+  return { chart, html };
+}
+function utcDay(f) { const u = new Date(0); u.setUTCFullYear(f.y, f.m, f.d); u.setUTCHours(12); return +u; }
+
+let timer = 0;
+function schedule() { clearTimeout(timer); timer = setTimeout(recompute, 120); }
+function recompute() {
+  if (!engine) return;
+  charts = {}; info = {};
+  for (const e of state.entries) {
+    let r;
+    try { r = resolve(e); } catch (err) { r = { err: 'The calculation failed: ' + (err.message || err) }; }
+    info[e.id] = r;
+    if (r.chart) charts[e.id] = { ...r.chart, label: entryLabel(e), entry: e };
+    const el = $(`${e.id}-res`);
+    if (el) el.innerHTML = r.err ? `<span class="err">${esc(r.err)}</span>` : r.html;
+  }
+  const members = state.of.map(k => charts[k]).filter(Boolean);
+  if (members.length >= 2) {
+    charts.comp = { ...engine.composite(members, state.hsys), label: chartLabel('comp') };
+    charts.dav = { ...engine.davison(members, state.hsys), label: chartLabel('dav') };
+  }
+  draw();
+  persist();
+}
+
+// ---- Drawing -----------------------------------------------------------------------------------
+const css = n => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+function rgb(s) {
+  let m = /^#([0-9a-f]{6})$/i.exec(s);
+  if (m) return [0, 2, 4].map(i => parseInt(m[1].slice(i, i + 2), 16));
+  m = /rgba?\(\s*([\d.]+)[ ,]+([\d.]+)[ ,]+([\d.]+)/.exec(s);
+  return m ? [+m[1], +m[2], +m[3]] : [128, 128, 128];
+}
+const mixC = (a, b, t) => { const x = rgb(a), y = rgb(b); return `rgb(${x.map((v, i) => Math.round(v + (y[i] - v) * t)).join(' ')})`; };
+let C = {};
+function readColors() {
+  C = { ink: css('--ink'), muted: css('--muted'), line: css('--line'), panel: css('--panel'), accent: css('--accent'), warn: css('--warn'), soft: css('--soft'), bg1: css('--bg1') };
+  for (const p of POINTS) C[p.key] = p.key === 'snode' ? css('--c-node') : p.cls === 'angle' ? C.ink : css('--c-' + p.key);
+}
+const SYM = '"Noto Sans Symbols", "Noto Sans Symbols 2", "Apple Symbols", "Segoe UI Symbol", "DejaVu Sans", sans-serif';
+const SERIF = '"EB Garamond", Garamond, "Iowan Old Style", "Palatino Linotype", Georgia, serif';
+const f1 = v => (Math.round(v * 10) / 10).toString();
+
+// Spread glyphs that would overlap so each keeps at least minSep degrees; returns display longitudes.
+function spread(items, minSep) {
+  const n = items.length;
+  if (n < 2) return items.map(x => x.lon);
+  const order = items.map((x, i) => i).sort((a, b) => items[a].lon - items[b].lon);
+  const d = order.map(i => items[i].lon);
+  if (minSep * n >= 360) minSep = 360 / n * 0.98;
+  for (let it = 0; it < 300; it++) {
+    let moved = false;
+    for (let k = 0; k < n; k++) {
+      const j = (k + 1) % n;
+      let gap = d[j] - d[k]; if (j === 0) gap += 360;
+      if (gap < minSep - 1e-6) { const push = (minSep - gap) / 2 + 1e-4; d[k] -= push; d[j] += push; moved = true; }
+    }
+    if (!moved) break;
+  }
+  const out = new Array(n);
+  order.forEach((i, k) => { out[i] = d[k]; });
+  return out;
+}
+
+function ringCharts() {
+  return state.rings.map(k => ({ key: k, chart: charts[k] })).filter(r => r.chart);
+}
+function aspectPair(rings) {
+  const n = rings.length;
+  const opts = [['none', 'None']];
+  for (let i = 0; i < n; i++) opts.push([`${i}-${i}`, `Within ${rings[i].chart.label}`]);
+  for (let i = 0; i < n; i++) for (let j = i + 1; j < n; j++) opts.push([`${i}-${j}`, `${rings[i].chart.label} to ${rings[j].chart.label}`]);
+  let v = state.asp;
+  if (!opts.some(o => o[0] === v)) v = n === 1 ? '0-0' : n ? '0-1' : 'none';
+  $('asp').innerHTML = opts.map(([k, l]) => `<option value="${k}" ${k === v ? 'selected' : ''}>${esc(l)}</option>`).join('');
+  if (v === 'none') return null;
+  const [i, j] = v.split('-').map(Number);
+  return { i, j, A: rings[i].chart, B: rings[j].chart, same: i === j };
+}
+
+function svgWheel(rings, pair, aspects) {
+  const n = rings.length, cx = 500, cy = 500;
+  const R0 = 494, R1 = 438, Ra = [0, 200, 168, 146, 130][n], Rh = Ra + 26, W = (R1 - Rh) / n;
+  const inner = rings[0].chart;
+  const rot = inner.cusps ? inner.pts.asc.lon : 0;
+  const P = (lon, r) => { const a = Math.PI + (lon - rot) * RAD; return [cx + r * Math.cos(a), cy - r * Math.sin(a)]; };
+  const L = (lon1, r1, lon2, r2, attrs) => { const [x1, y1] = P(lon1, r1), [x2, y2] = P(lon2, r2); return `<line x1="${f1(x1)}" y1="${f1(y1)}" x2="${f1(x2)}" y2="${f1(y2)}" ${attrs}/>`; };
+  const T = (lon, r, txt, attrs) => { const [x, y] = P(lon, r); return `<text x="${f1(x)}" y="${f1(y)}" ${attrs}>${txt}</text>`; };
+  const circ = (r, attrs) => `<circle cx="${cx}" cy="${cy}" r="${f1(r)}" ${attrs}/>`;
+  let s = '';
+  s += circ(R0, `fill="${C.panel}" stroke="${C.line}" stroke-width="1.2"`);
+  s += circ(R1, `fill="none" stroke="${C.line}" stroke-width="1.2"`);
+  // Rings, shaded a little more for each outer chart
+  for (let k = n - 1; k >= 0; k--) s += circ(Rh + (k + 1) * W, `fill="${k ? mixC(C.panel, C.accent, 0.035 * k) : C.panel}" stroke="${C.line}" stroke-width="1"`);
+  s += circ(Rh, `fill="${C.panel}" stroke="${C.line}" stroke-width="1"`);
+  s += circ(Ra, `fill="${C.panel}" stroke="${C.line}" stroke-width="1"`);
+  // Zodiac band: sign boundaries, degree ticks, glyphs
+  for (let d = 0; d < 360; d++) {
+    if (d % 30 === 0) { s += L(d, R1, d, R0, `stroke="${C.line}" stroke-width="1.2"`); continue; }
+    const len = d % 10 === 0 ? 13 : d % 5 === 0 ? 9 : 5;
+    s += L(d, R1, d, R1 + len, `stroke="${C.muted}" stroke-width="${d % 5 ? 0.6 : 0.9}" stroke-opacity=".7"`);
+  }
+  for (let i = 0; i < 12; i++) s += T(i * 30 + 15, (R1 + 13 + R0) / 2 + 1, SIGN_GLYPHS[i], `fill="${C.accent}" font-family='${SYM}' font-size="27" text-anchor="middle" dominant-baseline="central"`);
+  // Houses of the inner chart
+  if (inner.cusps) {
+    inner.cusps.forEach((c, i) => {
+      const angle = i % 3 === 0;
+      s += L(c, Ra, c, angle ? R0 : R1, `stroke="${angle ? C.accent : C.line}" stroke-width="${angle ? 2 : 1}"`);
+      const next = inner.cusps[(i + 1) % 12];
+      s += T(c + norm360(next - c) / 2, Ra + 13, i + 1, `fill="${C.muted}" font-family='${SERIF}' font-size="15" text-anchor="middle" dominant-baseline="central"`);
+    });
+    // Arrowheads on the Ascendant and Midheaven, outside the zodiac band
+    for (const [lon, lab] of [[inner.pts.asc.lon, 'AC'], [inner.pts.mc.lon, 'MC']]) {
+      const [x, y] = P(lon, R0 - 2), [xa, ya] = P(lon - 1.6, R0 - 14), [xb, yb] = P(lon + 1.6, R0 - 14);
+      s += `<path d="M${f1(x)} ${f1(y)}L${f1(xa)} ${f1(ya)}L${f1(xb)} ${f1(yb)}Z" fill="${C.accent}"/>`;
+    }
+  }
+  // Points, ring by ring
+  const full = W >= 104;
+  rings.forEach(({ chart }, k) => {
+    const rIn = Rh + k * W, rOut = rIn + W;
+    const items = POINTS.filter(p => chart.pts[p.key]).map(p => ({ p, lon: chart.pts[p.key].lon, speed: chart.pts[p.key].speed }));
+    const gs = full ? (n === 1 ? 31 : 27) : (n === 3 ? 25 : 22);
+    const rg = rOut - gs * 0.72;
+    // Room for the glyph at its own radius and for the label stack at the innermost radius it reaches.
+    const minSep = full ? Math.max(gs * 1.06 / rg, 36 / (rg - gs * 0.95 - 40)) / RAD : Math.max(gs * 1.06 / rg, (n === 4 ? 38 : 41) / (rg - gs * 0.92)) / RAD;
+    const disp = spread(items, minSep);
+    items.forEach((it, i) => {
+      const { p, lon } = it, col = C[p.key], dl = disp[i];
+      const q = split(lon), retro = p.canRetro && it.speed != null && it.speed < 0;
+      const house = houseOf(lon, chart.cusps);
+      s += `<g><title>${esc(`${chart.label}: ${p.name} ${q.deg}°${pad(q.min)}′ ${SIGNS[q.sign]}${retro ? ', retrograde' : ''}${house ? `, house ${house}` : ''}`)}</title>`;
+      s += L(lon, rOut, lon, rOut - 7, `stroke="${col}" stroke-width="1.6"`);
+      s += L(lon, rIn, lon, rIn + 5, `stroke="${col}" stroke-width="1.2"`);
+      if (Math.abs(dl - lon) > 0.4) s += L(lon, rOut - 7, dl, rg + gs * 0.48, `stroke="${col}" stroke-width=".8" stroke-opacity=".7"`);
+      const gAttrs = p.text ? `font-family='${SERIF}' font-weight="600" font-size="${Math.round(gs * 0.62)}"` : `font-family='${SYM}' font-size="${gs}"`;
+      s += T(dl, rg, esc(p.glyph), `fill="${col}" ${gAttrs} text-anchor="middle" dominant-baseline="central"`);
+      const rx = retro ? `<tspan fill="${C.accent}" font-style="italic" font-size="0.8em"> R</tspan>` : '';
+      if (full) {
+        const r1 = rg - gs * 0.95, r2 = r1 - 20, r3 = r2 - 18;
+        s += T(dl, r1, `${q.deg}°`, `fill="${C.ink}" font-family='${SERIF}' font-size="18" text-anchor="middle" dominant-baseline="central"`);
+        s += T(dl, r2, SIGN_GLYPHS[q.sign], `fill="${C.muted}" font-family='${SYM}' font-size="15" text-anchor="middle" dominant-baseline="central"`);
+        s += T(dl, r3, `${pad(q.min)}′${rx}`, `fill="${C.ink}" font-family='${SERIF}' font-size="14" text-anchor="middle" dominant-baseline="central"`);
+      } else {
+        s += T(dl, rg - gs * 0.92, `${q.deg}°${pad(q.min)}${rx}`, `fill="${C.ink}" font-family='${SERIF}' font-size="${n === 4 ? 12.5 : 13.5}" text-anchor="middle" dominant-baseline="central"`);
+      }
+      s += '</g>';
+    });
+  });
+  // Aspect lines through the centre
+  if (pair) {
+    for (const a of aspects) {
+      if (a.aspect.kind === 'conj') continue;
+      const la = pair.A.pts[a.a.key].lon, lb = pair.B.pts[a.b.key].lon;
+      const tight = 1 - a.orb / a.max;
+      const col = a.aspect.kind === 'hard' ? C.warn : a.aspect.kind === 'soft' ? C.soft : C.node;
+      s += L(la, Ra - 2, lb, Ra - 2, `stroke="${col}" stroke-width="${f1(0.7 + 1.9 * tight)}" stroke-opacity="${f1(0.35 + 0.6 * tight)}"${a.aspect.kind === 'minor' ? ' stroke-dasharray="5 4"' : ''}`);
+    }
+    const dots = new Map();
+    for (const [ch, keys] of [[pair.A, aspects.map(a => a.a.key)], [pair.B, aspects.map(a => a.b.key)]]) for (const k of keys) dots.set(ch.pts[k].lon.toFixed(3) + k, [ch.pts[k].lon, C[k]]);
+    for (const [lon, col] of dots.values()) { const [x, y] = P(lon, Ra - 2); s += `<circle cx="${f1(x)}" cy="${f1(y)}" r="2.6" fill="${col}"/>`; }
+  }
+  return s;
+}
+
+const RX = '<span class="rx" title="retrograde">R<sub>x</sub></span>';
+function posHTML(lon) {
+  const q = split(lon);
+  return `<b>${q.deg}°${pad(q.min)}′</b> <span class="g">${SIGN_GLYPHS[q.sign]}</span> ${SIGNS[q.sign]}`;
+}
+const ord = n => n + (n % 10 === 1 && n % 100 !== 11 ? 'st' : n % 10 === 2 && n % 100 !== 12 ? 'nd' : n % 10 === 3 && n % 100 !== 13 ? 'rd' : 'th');
+function glyphCell(p, tag = 'span') { return `<${tag} class="gl${p.text ? ' t' : ''}" style="color:${p.cls === 'angle' ? 'var(--ink)' : `var(--c-${p.key === 'snode' ? 'node' : p.key})`}" aria-hidden="true">${esc(p.glyph)}</${tag}>`; }
+function chartSub(r) {
+  const c = r.chart;
+  if (c.derived === 'composite') return `Midpoints of ${esc(ofNames())}.${c.cusps ? ` Houses from the composite Midheaven at ${coordText(c.lat, true)}.` : ' No houses: not every birth time is known.'}`;
+  const ms = jdToMs(c.jd), d = new Date(ms);
+  const when = `${pad(d.getUTCHours())}:${pad(d.getUTCMinutes())} UT, ${fmtLocal.format(d)}`;
+  if (c.derived === 'davison') return `${when} at ${coordText(c.lat, true)} ${coordText(c.lon, false)}.${c.cusps ? '' : ' No houses: not every birth time is known.'}`;
+  return info[r.key] && info[r.key].html ? info[r.key].html.replace(/<br>.*$/, '') : '';
+}
+function tablesHTML(rings) {
+  const inner = rings[0].chart;
+  return rings.map((r, k) => {
+    const c = r.chart, other = k > 0 && inner.cusps;
+    const hd = `<li class="hd"><span></span><span class="nm">Point</span><span>Position</span><span class="h">House</span><span class="h">${other ? 'Ring 1' : ''}</span></li>`;
+    const rows = POINTS.filter(p => c.pts[p.key]).map(p => {
+      const v = c.pts[p.key], retro = p.canRetro && v.speed != null && v.speed < 0;
+      const h = houseOf(v.lon, c.cusps), h1 = other ? houseOf(v.lon, inner.cusps) : null;
+      return `<li>${glyphCell(p)}<span class="nm">${p.name}</span><span class="p">${posHTML(v.lon)}${retro ? RX : ''}</span><span class="h own">${h ? ord(h) : ''}</span><span class="h">${h1 ? ord(h1) : ''}</span></li>`;
+    }).join('');
+    const cusps = c.cusps ? `<div class="cusps">${c.cusps.map((x, i) => { const q = split(x); return `<span><i>${i + 1}</i>${q.deg}<span class="g">${SIGN_GLYPHS[q.sign]}</span>${pad(q.min)}</span>`; }).join('')}</div>` : '';
+    return `<div class="chartinfo"><h3>${k === 0 ? 'Inner ring' : RING_NAMES[k]}: ${esc(c.label)}</h3><p class="sub">${chartSub(r)}</p>
+      <ul class="rows pos">${hd}${rows}</ul>${cusps}</div>`;
+  }).join('');
+}
+function gridHTML(pair, aspects) {
+  if (!pair) return '';
+  const { A, B, same } = pair;
+  const pa = POINTS.filter(p => A.pts[p.key] && p.key !== 'snode'), pb = POINTS.filter(p => B.pts[p.key] && p.key !== 'snode');
+  const hit = new Map(aspects.map(a => [a.a.key + '|' + a.b.key, a]));
+  const th = p => `<th class="${p.text ? 't' : ''}" style="color:${p.cls === 'angle' ? 'var(--ink)' : `var(--c-${p.key})`}" title="${p.name}">${esc(p.glyph)}</th>`;
+  const corner = same ? '' : `${esc(A.label)} ↓<br>${esc(B.label)} →`;
+  let h = `<tr><th class="corner">${corner}</th>${pb.map(th).join('')}</tr>`;
+  pa.forEach((a, i) => {
+    h += `<tr>${th(a)}`;
+    pb.forEach((b, j) => {
+      if (same && j >= i) { h += '<td class="x"></td>'; return; }
+      const x = same ? hit.get(b.key + '|' + a.key) : hit.get(a.key + '|' + b.key);
+      if (!x) { h += '<td></td>'; return; }
+      const o = Math.floor(x.orb * 60 + 1e-6);
+      h += `<td class="k-${x.aspect.kind}${x.orb < 1 ? ' tight' : ''}" title="${esc(`${a.name} ${x.aspect.name} ${b.name}, orb ${Math.floor(o / 60)}°${pad(o % 60)}′`)}"><span class="a">${x.aspect.glyph}</span><small>${Math.floor(o / 60)}°${pad(o % 60)}</small></td>`;
+    });
+    h += '</tr>';
+  });
+  return h;
+}
+
+function draw() {
+  readColors();
+  const rings = ringCharts();
+  const missing = state.rings.filter(k => !charts[k]);
+  if (!rings.length) {
+    $('wheel').innerHTML = '<title id="wheelTitle">Chart wheel</title>';
+    $('ringLegend').innerHTML = ''; $('keys').innerHTML = ''; $('asg').innerHTML = ''; $('tables').innerHTML = ''; $('asgNote').textContent = '';
+    setMsg(`Nothing to draw yet: ${missing.map(k => k === 'comp' || k === 'dav' ? 'the composite and Davison need at least two complete charts' : `${chartLabel(k)} needs a date, time and place`).join('; ')}.`, true);
+    aspectPair([]);
+    return;
+  }
+  const pair = aspectPair(rings);
+  const aspects = pair ? aspectsBetween(pair.A, pair.B, pair.same) : [];
+  $('wheel').innerHTML = `<title id="wheelTitle">${esc(rings.map(r => r.chart.label).join(', '))}</title>` + svgWheel(rings, pair, aspects);
+  $('ringLegend').innerHTML = rings.length === 1 ? `<span><b>${esc(rings[0].chart.label)}</b></span>` :
+    rings.map((r, k) => `<span><i class="sw" style="background:${k ? mixC(C.panel, C.accent, 0.035 * k) : C.panel}"></i>${RING_NAMES[k]}: <b>${esc(r.chart.label)}</b></span>`).join('');
+  $('keys').innerHTML = pair ? `<span><i class="ln" style="border-color:var(--warn)"></i>square, opposition</span><span><i class="ln" style="border-color:var(--soft)"></i>trine, sextile</span><span><i class="ln" style="border-color:var(--c-node);border-top-style:dashed"></i>quincunx</span><span>Thicker is tighter. Conjunctions are in the grid.</span>` : '';
+  $('asg').innerHTML = gridHTML(pair, aspects);
+  $('asgNote').textContent = pair ? (pair.same ? `Within ${pair.A.label}: ${aspects.length} aspects.` : `${pair.A.label} (rows) to ${pair.B.label} (columns): ${aspects.length} aspects.`) : 'Choose aspect lines above to see a grid.';
+  $('tables').innerHTML = tablesHTML(rings);
+  const bits = [];
+  if (missing.length) bits.push(`Left out: ${missing.map(chartLabel).join(', ')} (${missing.some(k => k === 'comp' || k === 'dav') ? 'composites need at least two complete charts' : 'needs a date and time zone'}).`);
+  if (!rings[0].chart.cusps) bits.push('The inner chart has no houses, so 0° Aries sits on the left.');
+  setMsg(bits.join(' ') || rings.map(r => r.chart.label).join(' · '), missing.length > 0);
+}
+
+// ---- Saving and sharing ------------------------------------------------------------------------
+function renderSaved() {
+  const all = savedCharts(), names = Object.keys(all).sort((a, b) => a.localeCompare(b));
+  $('savedList').innerHTML = names.length ? names.map(n => `<li><span>${esc(n)} <small class="note">${esc(all[n].date || '')} ${esc(all[n].place || '')}</small></span><button class="btn text" type="button" data-forget="${esc(n)}">Forget</button></li>`).join('')
+    : '<li class="note">None yet. “Save” on a chart keeps it here, in this browser only.</li>';
+}
+$('savedList').addEventListener('click', ev => {
+  const b = ev.target.closest('[data-forget]');
+  if (!b) return;
+  const all = savedCharts(); delete all[b.dataset.forget]; store.set('tp-charts-saved', all);
+  renderSaved(); renderEntries(); recompute();
+});
+$('link').addEventListener('click', async () => {
+  persist();
+  try { await navigator.clipboard.writeText(location.href); $('linkNote').textContent = 'Link copied. It carries the birth details in it, so share it only with people who should have them.'; }
+  catch (e) { $('linkNote').textContent = 'Copy the address in your browser’s address bar; it holds this chart.'; }
+});
+$('print').addEventListener('click', () => window.print());
+
+let fontCSS = null;
+async function embeddedFonts() {
+  if (fontCSS) return fontCSS;
+  const files = [['Noto Sans Symbols', 'noto-sans-symbols-symbols-400-normal.woff2', 'normal'], ['Noto Sans Symbols 2', 'noto-sans-symbols-2-symbols-400-normal.woff2', 'normal'], ['EB Garamond', 'eb-garamond-latin-wght-normal.woff2', 'normal'], ['EB Garamond', 'eb-garamond-latin-wght-italic.woff2', 'italic']];
+  const parts = await Promise.all(files.map(async ([fam, file, style]) => {
+    const buf = new Uint8Array(await (await fetch('../fonts/' + file)).arrayBuffer());
+    let bin = ''; for (let i = 0; i < buf.length; i += 0x8000) bin += String.fromCharCode.apply(null, buf.subarray(i, i + 0x8000));
+    return `@font-face{font-family:"${fam}";font-style:${style};font-weight:400 800;src:url(data:font/woff2;base64,${btoa(bin)}) format("woff2");}`;
+  }));
+  return (fontCSS = parts.join(''));
+}
+async function svgFile() {
+  const fonts = await embeddedFonts();
+  const label = ringCharts().map(r => r.chart.label).join(' · ');
+  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 -40 1000 1080" width="2000" height="2160"><style>${fonts}</style>` +
+    `<rect x="0" y="-40" width="1000" height="1080" fill="${C.panel}"/>${$('wheel').innerHTML.replace(/<title[^>]*>.*?<\/title>/, '')}` +
+    `<text x="500" y="1025" fill="${C.muted}" font-family='${SERIF}' font-size="16" text-anchor="middle">${esc(label)} · timepoetry.com</text></svg>`;
+}
+const fileBase = () => 'timepoetry-chart-' + ringCharts().map(r => r.chart.label).join('-').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 60);
+function download(blob, name) {
+  const url = URL.createObjectURL(blob), a = document.createElement('a');
+  a.href = url; a.download = name; document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 3000);
+}
+$('svg').addEventListener('click', async () => download(new Blob([await svgFile()], { type: 'image/svg+xml' }), fileBase() + '.svg'));
+$('png').addEventListener('click', async () => {
+  const url = URL.createObjectURL(new Blob([await svgFile()], { type: 'image/svg+xml' }));
+  const img = new Image();
+  img.onload = () => {
+    const cv = document.createElement('canvas'); cv.width = 2000; cv.height = 2160;
+    cv.getContext('2d').drawImage(img, 0, 0, 2000, 2160);
+    URL.revokeObjectURL(url);
+    cv.toBlob(b => download(b, fileBase() + '.png'), 'image/png');
+  };
+  img.onerror = () => { URL.revokeObjectURL(url); $('linkNote').textContent = 'The image could not be made in this browser; try Download SVG.'; };
+  img.src = url;
+});
+
+// ---- Start -------------------------------------------------------------------------------------
+renderEntries(); renderRingControls(); renderSaved();
+startTheme(() => { if (engine) draw(); });
+if (document.fonts) document.fonts.ready.then(() => { if (engine) draw(); });
+
+async function ephemerisFile(base, name) {
+  const r = await fetch(new URL('ephe/' + name, base));
+  if (!r.ok) throw new Error(name + ' ' + r.status);
+  return new Uint8Array(await r.arrayBuffer());
+}
+async function start() {
+  const base = new URL('../', import.meta.url);
+  const names = ['sepl_18.se1', 'semo_18.se1', 'seas_18.se1'];
+  const [M, ...bufs] = await Promise.all([
+    createSwissEph({ locateFile: f => new URL('vendor/' + f, base).href }),
+    ...names.map(n => ephemerisFile(base, n)),
+  ]);
+  const sky = new Sky(M, Object.fromEntries(names.map((n, i) => [n, bufs[i]])));
+  $('swe-ver').textContent = sky.version();
+  engine = new Charts(M);
+  recompute();
+}
+start().catch(err => { console.error(err); setMsg('The ephemeris did not load, so no chart can be cast. Check your connection and reload the page.', true); });
+
+// Places: the larger towns first, then the small ones in the background.
+loadShard('places-5000.json').then(() => {
+  const a = state.entries[0];
+  if (a.fresh && a.lat == null) {
+    const c = biggestInZone(a.zone);
+    if (c) { Object.assign(a, { place: c.label, lat: c.lat, lon: c.lon }); renderEntries(); schedule(); }
+  }
+  $('placesNote').textContent = '';
+  return loadShard('places-1000.json');
+}).then(() => { $('placesNote').textContent = ''; })
+  .catch(err => { console.error(err); $('placesNote').textContent = 'The list of places didn’t load; you can still type latitude, longitude and time zone.'; });
+</script>
+</body>
+</html>
